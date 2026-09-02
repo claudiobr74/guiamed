@@ -5,7 +5,7 @@ import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { withRls } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { parseQuantity } from "@/lib/quantity";
-import { validateImportRows, parseCsv, type ImportRow } from "@/lib/import-codes";
+import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRow } from "@/lib/import-codes";
 import { summarizeImportDiff } from "@/lib/import-diff";
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
 import { inspectPdf } from "@/lib/pdf/inspect";
@@ -140,30 +140,21 @@ async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format:
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await file.arrayBuffer());
-    const sheet = wb.worksheets[0];
-    if (!sheet) throw new Error("Planilha vazia.");
-    const header: string[] = [];
-    sheet.getRow(1).eachCell((cell, col) => {
-      header[col] = String(cell.value ?? "").toLowerCase();
-    });
-    const rows: ImportRow[] = [];
-    sheet.eachRow((row, index) => {
-      if (index === 1) return;
-      const obj: ImportRow = {};
-      row.eachCell((cell, col) => {
-        const key = header[col];
-        const value = String(cell.value ?? "");
-        if (key === "code_system") obj.code_system = value;
-        if (key === "code") obj.code = value;
-        if (key === "description") obj.description = value;
-        if (key === "version") obj.version = value;
-        if (key === "valid_from") obj.valid_from = value;
-        if (key === "valid_until") obj.valid_until = value;
-        if (key === "procedure_name") obj.procedure_name = value;
+    if (wb.worksheets.length === 0) throw new Error("Planilha vazia.");
+    let best: ImportRow[] = [];
+    for (const sheet of wb.worksheets) {
+      const matrix: string[][] = [];
+      sheet.eachRow({ includeEmpty: true }, (row, index) => {
+        const cells: string[] = [];
+        row.eachCell({ includeEmpty: true }, (cell, col) => {
+          cells[col - 1] = cellText(cell.value);
+        });
+        matrix[index - 1] = cells;
       });
-      rows.push(obj);
-    });
-    return { rows, format: "xlsx" };
+      const parsed = parseSheetMatrix(matrix);
+      if (parsed.length > best.length) best = parsed;
+    }
+    return { rows: best, format: "xlsx" };
   }
   return { rows: parseCsv(await file.text()), format: "csv" };
 }
@@ -179,6 +170,18 @@ export async function previewImportCodesAction(formData: FormData) {
     rows.map((r) => ({ ...r, version: r.version || version, code_system: r.code_system || defaultSystem })),
     defaultSystem,
   );
+  if (validated.rows.length === 0) {
+    return {
+      ok: false as const,
+      issues: [
+        {
+          row: 1,
+          field: "file",
+          message: "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
+        },
+      ],
+    };
+  }
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }
@@ -205,6 +208,18 @@ export async function importCodesAction(formData: FormData) {
     rows.map((r) => ({ ...r, version: r.version || version, code_system: r.code_system || defaultSystem })),
     defaultSystem,
   );
+  if (validated.rows.length === 0) {
+    return {
+      ok: false as const,
+      issues: [
+        {
+          row: 1,
+          field: "file",
+          message: "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
+        },
+      ],
+    };
+  }
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }

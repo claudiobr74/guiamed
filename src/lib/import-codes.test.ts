@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, validateImportRows } from "@/lib/import-codes";
+import { parseCsv, parseSheetMatrix, validateImportRows } from "@/lib/import-codes";
 import { summarizeImportDiff } from "@/lib/import-diff";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { buildJustificationDraft } from "@/lib/justification";
@@ -21,6 +21,27 @@ describe("importação", () => {
   it("csv", () => {
     const rows = parseCsv("code,description,version\n1,Teste,2026.1");
     expect(rows[0]?.code).toBe("1");
+  });
+
+  it("lê tabela Unimed/Aurum com título, vigência e DESCRIÇÃO", () => {
+    const rows = parseSheetMatrix([
+      ["Tabela Referência para Reembolso"],
+      ["Vigência 01/02/2022"],
+      [],
+      ["", "", "0,65", "1"],
+      ["", "DESCRIÇÃO", "HM", "CO", "Valor Referência Reembolso"],
+      ["40301320", "AMONIA, DOSAGEM, SANGUE", "R$ 3,90", "R$ 4,00"],
+      ["40301338", "FERRO SERICO, DOSAGEM", "R$ 4,10", "-"],
+      ["", "GRUPO EXAMES"],
+      ["40302000.0", "GLICOSE, DOSAGEM", "R$ 2,00"],
+    ]);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      code: "40301320",
+      description: "AMONIA, DOSAGEM, SANGUE",
+      valid_from: "2022-02-01",
+    });
+    expect(rows[2]?.code).toBe("40302000");
   });
 
   it("resume a diferença sem inventar conflitos", () => {

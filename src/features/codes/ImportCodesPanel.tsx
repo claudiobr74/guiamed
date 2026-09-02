@@ -16,6 +16,12 @@ type Preview = {
   unchanged: number;
 };
 
+function formatIssues(issues: Array<{ row: number; message: string }>) {
+  const shown = issues.slice(0, 8).map((i) => `Linha ${i.row}: ${i.message}`);
+  if (issues.length > 8) shown.push(`e mais ${issues.length - 8} ocorrência(s).`);
+  return shown.join(" | ");
+}
+
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -45,7 +51,7 @@ export function ImportCodesPanel() {
           start(async () => {
             const result = await previewImportCodesAction(formData);
             if (!result.ok) {
-              setIssues(result.issues.map((i) => `Linha ${i.row}: ${i.message}`).join(" | "));
+              setIssues(formatIssues(result.issues));
               return;
             }
             setPreview(result);
@@ -65,8 +71,9 @@ export function ImportCodesPanel() {
           <Input name="file" type="file" accept=".csv,.xlsx,.xls,.json" required />
         </Field>
         <p className="text-[12px] text-[#475569]">
-          Colunas: code, description, version, code_system, valid_from, valid_until, procedure_name.
-          A IA não inventa códigos. A importação só grava após a confirmação.
+          Aceita o layout oficial (code, description…) ou tabelas Unimed/TUSS com coluna DESCRIÇÃO e
+          código de 8 dígitos, mesmo com título e vigência no topo. A IA não inventa códigos. A
+          importação só grava após a confirmação.
         </p>
         {issues ? <p className="text-[12px] text-[#dc2626]">{issues}</p> : null}
         <Button type="submit" disabled={pending}>
@@ -128,7 +135,7 @@ export function ImportCodesPanel() {
                   start(async () => {
                     const result = await importCodesAction(new FormData(form));
                     if (!result.ok) {
-                      setIssues(result.issues.map((i) => `Linha ${i.row}: ${i.message}`).join(" | "));
+                      setIssues(formatIssues(result.issues));
                       return;
                     }
                     close();
