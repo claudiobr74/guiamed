@@ -2,7 +2,7 @@ import { cert, getApps, initializeApp, type App, type ServiceAccount } from "fir
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET } from "@/lib/firebase/config";
+import { FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, firestoreDatabaseId } from "@/lib/firebase/config";
 
 export function hasFirebaseAdminCredentials(): boolean {
   return Boolean(
@@ -60,7 +60,7 @@ let firestore: Firestore | null = null;
 
 export function firebaseDb() {
   if (firestore) return firestore;
-  firestore = getFirestore(getApp());
+  firestore = getFirestore(getApp(), firestoreDatabaseId());
   try {
     firestore.settings({ ignoreUndefinedProperties: true });
   } catch {
