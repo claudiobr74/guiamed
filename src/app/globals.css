@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --gm-primary: #1e5fa6;
+  --gm-primary-soft: #eff6ff;
+  --gm-text: #0f172a;
+  --gm-muted: #475569;
+  --gm-faint: #94a3b8;
+  --gm-border: #e2e8f0;
+  --gm-bg: #f8fafc;
+  --gm-success: #16a34a;
+  --gm-warning: #f59e0b;
+  --gm-danger: #dc2626;
+}
+
+@theme inline {
+  --color-gm-primary: var(--gm-primary);
+  --color-gm-primary-soft: var(--gm-primary-soft);
+  --color-gm-text: var(--gm-text);
+  --color-gm-muted: var(--gm-muted);
+  --color-gm-faint: var(--gm-faint);
+  --color-gm-border: var(--gm-border);
+  --color-gm-bg: var(--gm-bg);
+  --color-gm-success: var(--gm-success);
+  --color-gm-warning: var(--gm-warning);
+  --color-gm-danger: var(--gm-danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--gm-bg);
+  color: var(--gm-text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--gm-primary);
+  outline-offset: 2px;
+}

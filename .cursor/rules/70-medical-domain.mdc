@@ -1,0 +1,17 @@
+---
+description: Domínio médico do GuiaMed — PDF original, códigos oficiais, snapshots, dados sensíveis.
+globs: "{src/lib/pdf/**,src/lib/codes.ts,src/lib/import-codes.ts,src/lib/quantity.ts,src/lib/justification.ts,src/features/**,src/types/domain.ts}"
+alwaysApply: true
+---
+
+# Domínio médico
+
+Nunca perder:
+- o PDF oficial original é preservado e preenchido (`pdf-lib` overlay/AcroForm), não redesenhado;
+- templates de PDF são versionados (`templateVersions`);
+- cada procedimento tem `quantity` (number, padrão 1, editável, inteiro > 0);
+- TUSS, IPASGO e CID vêm de bases importadas/oficiais; IA nunca inventa códigos;
+- justificativa clínica usa só fatos informados;
+- documentos finalizados não são editados; duplicar cria novo rascunho;
+- snapshots de códigos/CID ficam gravados na solicitação;
+- dados de saúde exigem autorização no servidor e arquivos privados.

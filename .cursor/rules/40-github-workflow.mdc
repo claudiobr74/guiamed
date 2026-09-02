@@ -1,0 +1,12 @@
+---
+description: GitHub — branches, PR e CI do GuiaMed.
+globs: ".github/**"
+alwaysApply: false
+---
+
+# GitHub
+
+- Versionamento só via GitHub. Mudanças passam por Pull Request.
+- CI em `.github/workflows/` executa lint, typecheck, test e build.
+- Não usar `gh` para criar/editar PR quando houver ferramenta de PR do ambiente; o histórico e o diff devem permanecer revisáveis.
+- Secrets nunca entram no repositório. Documentar variáveis em `.env.example`.

@@ -1,0 +1,26 @@
+---
+description: Segurança Firebase (Auth, Firestore, Storage) e tenancy do GuiaMed.
+globs: "{src/lib/firebase/**,src/lib/db/**,src/lib/auth/**,src/lib/storage/**,firestore.rules,storage.rules,firebase.json}"
+alwaysApply: false
+---
+
+# Firebase
+
+Projeto: `guiamed-918ee`. Auth, Firestore e Storage. Sem PGlite/Supabase.
+
+## Autorização
+- Autorização real no servidor. Esconder item no Sidebar não é controle de acesso.
+- Papel (`admin` | `doctor`) e `organizationId` devem ser revalidados no Firestore, não só no cookie.
+- Médico não acessa rotas/ações administrativas mesmo com URL direta.
+- `SESSION_SECRET` é obrigatório em produção.
+
+## Dados
+- Documentos da organização vivem em `organizations/{orgId}/...`.
+- `users/{uid}` carrega `organizationId`, `role`, `active`.
+- Toda query filtra pela organização da sessão.
+- Storage: caminho `{bucket}/{organizationId}/...`. Buckets privados. Sem fallback em disco em produção.
+
+## Rules
+- `firestore.rules` e `storage.rules` negam acesso direto do cliente.
+- O Next.js usa Admin SDK. Mudança de coleção/campo exige atualizar rules + validação + tenancy juntos.
+- Nunca commitar chaves privadas, `FIREBASE_SERVICE_ACCOUNT` ou `.env.local`.
