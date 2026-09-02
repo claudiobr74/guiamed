@@ -3,7 +3,7 @@ import { PdfMapper } from "@/features/templates/PdfMapper";
 import { requirePageUser } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { getTemplateVersion, listMappings, listRepeaters } from "@/lib/db/repos";
-import { publicFileUrl } from "@/lib/storage/local";
+import { publicFileUrl } from "@/lib/storage";
 import { notFound } from "next/navigation";
 
 export default async function MapperPage({ params }: { params: Promise<{ versionId: string }> }) {
@@ -11,12 +11,12 @@ export default async function MapperPage({ params }: { params: Promise<{ version
   if (user.role !== "admin") notFound();
   const { versionId } = await params;
   const data = await withRls(user.organizationId, user.id, async (db) => {
-    const version = await getTemplateVersion(db, versionId);
+    const version = await getTemplateVersion(db, user.organizationId, versionId);
     if (!version) return null;
     return {
       version,
-      mappings: await listMappings(db, versionId),
-      repeaters: await listRepeaters(db, versionId),
+      mappings: await listMappings(db, user.organizationId, versionId),
+      repeaters: await listRepeaters(db, user.organizationId, versionId),
     };
   });
   if (!data) notFound();

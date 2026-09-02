@@ -12,7 +12,7 @@ import { validateImportRows, parseCsv, type ImportRow } from "@/lib/import-codes
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
 import { inspectPdf } from "@/lib/pdf/inspect";
 import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
-import { putObject, getObject } from "@/lib/storage/local";
+import { putObject, getObject } from "@/lib/storage";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import type {
   Doctor,
@@ -264,12 +264,16 @@ export async function uploadTemplateAction(formData: FormData) {
 
 export async function saveMappingsAction(versionId: string, mappings: Omit<FieldMapping, "id" | "templateVersionId">[]) {
   const user = await requireAdmin();
-  await withRls(user.organizationId, user.id, (db) => repos.saveMappings(db, versionId, mappings));
+  await withRls(user.organizationId, user.id, (db) =>
+    repos.saveMappings(db, user.organizationId, versionId, mappings),
+  );
 }
 
 export async function saveRepeaterAction(repeater: Omit<PdfRepeater, "id"> & { id?: string }) {
   const user = await requireAdmin();
-  await withRls(user.organizationId, user.id, (db) => repos.saveRepeater(db, repeater));
+  await withRls(user.organizationId, user.id, (db) =>
+    repos.saveRepeater(db, user.organizationId, repeater),
+  );
 }
 
 export async function generatePdfAction(requestId: string, options?: { finalize?: boolean }) {
@@ -280,10 +284,10 @@ export async function generatePdfAction(requestId: string, options?: { finalize?
     if (!request.templateVersionId) {
       throw new Error("Selecione um template antes de gerar o PDF.");
     }
-    const version = await repos.getTemplateVersion(db, request.templateVersionId);
+    const version = await repos.getTemplateVersion(db, user.organizationId, request.templateVersionId);
     if (!version) throw new Error("Versão do template não encontrada.");
-    const mappings = await repos.listMappings(db, version.id);
-    const repeaters = await repos.listRepeaters(db, version.id);
+    const mappings = await repos.listMappings(db, user.organizationId, version.id);
+    const repeaters = await repos.listRepeaters(db, user.organizationId, version.id);
     const errors = validateRequestForPdf(request, mappings);
     if (errors.length > 0) throw new Error(errors[0]);
     const templateBytes = await getObject(version.filePath);

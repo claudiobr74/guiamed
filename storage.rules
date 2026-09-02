@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Arquivos médicos são privados. Download passa pela API autenticada do Next.js.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

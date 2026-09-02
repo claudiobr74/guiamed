@@ -4,7 +4,7 @@ import { Button, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { hydrateRequest, listGenerated } from "@/lib/db/repos";
-import { publicFileUrl } from "@/lib/storage/local";
+import { publicFileUrl } from "@/lib/storage";
 import { notFound } from "next/navigation";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
@@ -15,7 +15,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
     try {
       return {
         request: await hydrateRequest(db, user.organizationId, id),
-        docs: await listGenerated(db, id),
+        docs: await listGenerated(db, user.organizationId, id),
       };
     } catch {
       return null;

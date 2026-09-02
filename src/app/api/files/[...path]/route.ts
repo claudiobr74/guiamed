@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth/current";
-import { getObject } from "@/lib/storage/local";
+import { fileContentType, getObject } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -20,7 +20,7 @@ export async function GET(
     const bytes = await getObject(filePath);
     return new NextResponse(Buffer.from(bytes), {
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type": fileContentType(filePath),
         "Content-Disposition": "inline",
         "Cache-Control": "private, no-store",
       },

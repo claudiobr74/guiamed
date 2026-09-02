@@ -1,6 +1,15 @@
-import bcrypt from "bcryptjs";
-import { withRls, query, queryOne, getDb } from "@/lib/db/client";
+import { firebaseAuth } from "@/lib/firebase/admin";
+import { firebaseWebApiKey } from "@/lib/firebase/config";
+import { getDb } from "@/lib/db/client";
 import type { SessionUser, UserRole } from "@/types/domain";
+
+interface AuthProfile {
+  organizationId: string;
+  role: UserRole;
+  fullName: string;
+  email: string;
+  active: boolean;
+}
 
 export async function registerOrganization(input: {
   organizationName: string;
@@ -9,81 +18,77 @@ export async function registerOrganization(input: {
   password: string;
   role?: UserRole;
 }): Promise<SessionUser> {
+  const email = input.email.toLowerCase();
   const db = await getDb();
-  const existing = await queryOne<{ id: string }>(
-    db,
-    `SELECT id FROM profiles WHERE lower(email) = lower($1)`,
-    [input.email],
-  );
-  if (existing) {
+  const existing = await db.collection("users").where("email", "==", email).limit(1).get();
+  if (!existing.empty) {
     throw new Error("Já existe um usuário com este e-mail.");
   }
-  const org = await queryOne<{ id: string }>(
-    db,
-    `INSERT INTO organizations (name) VALUES ($1) RETURNING id`,
-    [input.organizationName],
-  );
-  if (!org) throw new Error("Não foi possível criar a organização.");
-  const profile = await queryOne<{ id: string }>(
-    db,
-    `INSERT INTO profiles (organization_id, role, full_name, email, active)
-     VALUES ($1, $2, $3, $4, true) RETURNING id`,
-    [org.id, input.role ?? "admin", input.fullName, input.email.toLowerCase()],
-  );
-  if (!profile) throw new Error("Não foi possível criar o perfil.");
-  const hash = await bcrypt.hash(input.password, 10);
-  await db.query(`INSERT INTO local_credentials (user_id, password_hash) VALUES ($1, $2)`, [
-    profile.id,
-    hash,
-  ]);
-  return {
-    id: profile.id,
-    organizationId: org.id,
-    role: input.role ?? "admin",
+  const userRecord = await firebaseAuth().createUser({
+    email,
+    password: input.password,
+    displayName: input.fullName,
+  });
+  const orgRef = db.collection("organizations").doc();
+  await orgRef.set({
+    name: input.organizationName,
+    cnpj: null,
+    phone: null,
+    email: null,
+    address: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  const role = input.role ?? "admin";
+  await db.collection("users").doc(userRecord.uid).set({
+    organizationId: orgRef.id,
+    role,
     fullName: input.fullName,
-    email: input.email.toLowerCase(),
+    email,
+    active: true,
+    createdAt: new Date().toISOString(),
+  } satisfies AuthProfile & { createdAt: string });
+  return {
+    id: userRecord.uid,
+    organizationId: orgRef.id,
+    role,
+    fullName: input.fullName,
+    email,
   };
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<SessionUser> {
-  const db = await getDb();
-  const row = await queryOne<{
-    id: string;
-    organization_id: string;
-    role: UserRole;
-    full_name: string;
-    email: string;
-    password_hash: string;
-    active: boolean;
-  }>(
-    db,
-    `SELECT p.id, p.organization_id, p.role, p.full_name, p.email, p.active, c.password_hash
-     FROM profiles p
-     JOIN local_credentials c ON c.user_id = p.id
-     WHERE lower(p.email) = lower($1)`,
-    [email],
+  const apiKey = firebaseWebApiKey();
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    },
   );
-  if (!row || !row.active) {
+  const payload = (await response.json()) as { localId?: string; error?: { message?: string } };
+  if (!response.ok || !payload.localId) {
     throw new Error("E-mail ou senha inválidos.");
   }
-  const ok = await bcrypt.compare(password, row.password_hash);
-  if (!ok) throw new Error("E-mail ou senha inválidos.");
+  const db = await getDb();
+  const snap = await db.collection("users").doc(payload.localId).get();
+  const data = snap.data() as AuthProfile | undefined;
+  if (!snap.exists || !data || !data.active) {
+    throw new Error("E-mail ou senha inválidos.");
+  }
   return {
-    id: row.id,
-    organizationId: row.organization_id,
-    role: row.role,
-    fullName: row.full_name,
-    email: row.email,
+    id: payload.localId,
+    organizationId: data.organizationId,
+    role: data.role,
+    fullName: data.fullName,
+    email: data.email,
   };
 }
 
 export async function getProfile(userId: string) {
   const db = await getDb();
-  return queryOne(
-    db,
-    `SELECT id, organization_id, role, full_name, email, active FROM profiles WHERE id = $1`,
-    [userId],
-  );
+  const snap = await db.collection("users").doc(userId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() };
 }
-
-export { withRls, query, queryOne };

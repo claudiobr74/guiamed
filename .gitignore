@@ -37,6 +37,12 @@ yarn-error.log*
 # local database and private medical files
 /data
 
+# firebase CLI
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
