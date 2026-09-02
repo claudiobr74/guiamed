@@ -1,14 +1,14 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { RequestEditor } from "@/features/requests/RequestEditor";
 import { requirePageUser } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { hydrateRequest, listDoctors, listInstitutions, listInsurers, listKits, listPatients, listTemplates } from "@/lib/db/repos";
 import { notFound } from "next/navigation";
 
 export default async function GuiaPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePageUser();
   const { id } = await params;
-  const data = await withRls(user.organizationId, user.id, async (db) => {
+  const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
       const request = await hydrateRequest(db, user.organizationId, id);
       return {

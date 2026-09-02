@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { hydrateRequest, listGenerated } from "@/lib/db/repos";
 import { publicFileUrl } from "@/lib/storage";
 import { notFound } from "next/navigation";
@@ -18,7 +18,7 @@ export default async function PreviewPage({
   const user = await requirePageUser();
   const { id } = await params;
   const { doc: selectedDocumentId } = await searchParams;
-  const data = await withRls(user.organizationId, user.id, async (db) => {
+  const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
       return {
         request: await hydrateRequest(db, user.organizationId, id),

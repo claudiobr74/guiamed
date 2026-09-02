@@ -4,6 +4,7 @@ import * as repos from "@/lib/db/repos";
 import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
 import { getObject } from "@/lib/storage";
 import type { SessionUser } from "@/types/domain";
+import { validateRequestForFinalization } from "@/lib/requests/finalization-validation";
 
 export interface RenderedRequestPdf {
   bytes: Uint8Array;
@@ -32,12 +33,17 @@ export async function renderRequestPdf(
     request.templateVersionId,
   );
   if (!version) throw new Error("Versão do template não encontrada.");
+  const templates = await repos.listTemplates(db, user.organizationId);
+  const template = templates.find((candidate) => candidate.id === request.templateId) ?? null;
 
   const [mappings, repeaters] = await Promise.all([
     repos.listMappings(db, user.organizationId, version.id),
     repos.listRepeaters(db, user.organizationId, version.id),
   ]);
   const errors = validateRequestForPdf(request, mappings);
+  const finalizationIssues = validateRequestForFinalization({ request, template, version, mappings, repeaters });
+  const blockingIssue = finalizationIssues.find((issue) => issue.severity === "error");
+  if (blockingIssue) throw new Error(blockingIssue.message);
   if (errors.length > 0) throw new Error(errors[0]);
 
   const templateBytes = await getObject(version.filePath, user.organizationId);

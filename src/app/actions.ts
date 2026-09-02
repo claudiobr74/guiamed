@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids, searchCid10 } from "@/lib/cid10/catalog";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { parseQuantity } from "@/lib/quantity";
 import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRow } from "@/lib/import-codes";
@@ -27,7 +27,7 @@ import ExcelJS from "exceljs";
 
 export async function savePatientAction(data: Partial<Patient> & { fullName: string; id?: string }) {
   const user = await requireUser();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.upsertPatient(db, user.organizationId, user.id, data),
   );
 }
@@ -36,7 +36,7 @@ export async function saveDoctorAction(
   data: Partial<Doctor> & { name: string; crm: string; crmState: string; id?: string },
 ) {
   const user = await requireUser();
-  return withRls(user.organizationId, user.id, (db) => repos.upsertDoctor(db, user.organizationId, data));
+  return withOrganizationContext(user.organizationId, user.id, (db) => repos.upsertDoctor(db, user.organizationId, data));
 }
 
 export async function saveInstitutionAction(data: {
@@ -49,14 +49,14 @@ export async function saveInstitutionAction(data: {
   phone?: string;
 }) {
   const user = await requireAdmin();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.upsertInstitution(db, user.organizationId, data),
   );
 }
 
 export async function saveInsurerAction(data: { id?: string; name: string; code?: string }) {
   const user = await requireAdmin();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.upsertInsurer(db, user.organizationId, data),
   );
 }
@@ -69,7 +69,7 @@ export async function saveProcedureAction(data: {
   synonyms?: string[];
 }) {
   const user = await requireAdmin();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.upsertProcedure(db, user.organizationId, data),
   );
 }
@@ -83,13 +83,13 @@ export async function saveKitAction(data: {
 }) {
   const user = await requireAdmin();
   for (const item of data.items) parseQuantity(item.defaultQuantity);
-  return withRls(user.organizationId, user.id, (db) => repos.upsertKit(db, user.organizationId, data));
+  return withOrganizationContext(user.organizationId, user.id, (db) => repos.upsertKit(db, user.organizationId, data));
 }
 
 export async function searchProceduresAction(q: string) {
   const user = await requireUser();
   if (!q.trim()) return [];
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.searchProcedures(db, user.organizationId, q),
   );
 }
@@ -102,14 +102,14 @@ export async function searchCidsAction(q: string) {
 
 export async function searchPatientsAction(q: string) {
   const user = await requireUser();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.listPatients(db, user.organizationId, q),
   );
 }
 
 export async function createRequestAction() {
   const user = await requireUser();
-  const id = await withRls(user.organizationId, user.id, (db) => repos.createDraft(db, user));
+  const id = await withOrganizationContext(user.organizationId, user.id, (db) => repos.createDraft(db, user));
   redirect(`/guias/${id}`);
 }
 
@@ -120,13 +120,13 @@ export async function saveRequestAction(request: SurgicalRequest) {
     ...request,
     cids: normalizeRequestCids(request.cids, request.id),
   };
-  await withRls(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
+  await withOrganizationContext(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
   return { ok: true as const };
 }
 
 export async function duplicateRequestAction(id: string) {
   const user = await requireUser();
-  const newId = await withRls(user.organizationId, user.id, (db) =>
+  const newId = await withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.duplicateRequest(db, user, id),
   );
   redirect(`/guias/${newId}`);
@@ -191,7 +191,7 @@ export async function previewImportCodesAction(formData: FormData) {
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }
-  const existing = await withRls(user.organizationId, user.id, (db) => repos.listCodes(db, user.organizationId));
+  const existing = await withOrganizationContext(user.organizationId, user.id, (db) => repos.listCodes(db, user.organizationId));
   const diff = summarizeImportDiff(validated.rows, existing);
   return {
     ok: true as const,
@@ -229,7 +229,7 @@ export async function importCodesAction(formData: FormData) {
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }
-  const result = await withRls(user.organizationId, user.id, (db) =>
+  const result = await withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.insertCodesIdempotent(db, user.organizationId, user.id, {
       codeSystem: defaultSystem,
       version: version || validated.rows[0]?.version || "1",
@@ -251,7 +251,7 @@ export async function uploadTemplateAction(formData: FormData) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const meta = await inspectPdf(bytes);
   const stored = await putObject("pdf-templates", user.organizationId, file.name, bytes);
-  const created = await withRls(user.organizationId, user.id, (db) =>
+  const created = await withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.createTemplateVersion(db, user.organizationId, user.id, {
       templateId: String(formData.get("templateId") || "") || undefined,
       name: String(formData.get("name") || file.name),
@@ -275,21 +275,21 @@ export async function uploadTemplateAction(formData: FormData) {
 
 export async function saveMappingsAction(versionId: string, mappings: Omit<FieldMapping, "id" | "templateVersionId">[]) {
   const user = await requireAdmin();
-  await withRls(user.organizationId, user.id, (db) =>
+  await withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.saveMappings(db, user.organizationId, versionId, mappings),
   );
 }
 
 export async function saveRepeaterAction(repeater: Omit<PdfRepeater, "id"> & { id?: string }) {
   const user = await requireAdmin();
-  await withRls(user.organizationId, user.id, (db) =>
+  await withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.saveRepeater(db, user.organizationId, repeater),
   );
 }
 
 export async function generatePdfAction(requestId: string) {
   const user = await requireUser();
-  return withRls(user.organizationId, user.id, async (db) => {
+  return withOrganizationContext(user.organizationId, user.id, async (db) => {
     const rendered = await renderRequestPdf(db, user, requestId);
     const stored = await putObject(
       "generated-documents",
@@ -318,7 +318,7 @@ export async function generatePdfAction(requestId: string) {
 
 export async function listRequestsAction(filters: { q?: string; status?: RequestStatus; from?: string; to?: string }) {
   const user = await requireUser();
-  return withRls(user.organizationId, user.id, (db) =>
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
     repos.listRequests(db, user.organizationId, filters),
   );
 }

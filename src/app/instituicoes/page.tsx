@@ -1,14 +1,14 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listInstitutions, listInsurers } from "@/lib/db/repos";
 import { saveInstitutionAction, saveInsurerAction } from "@/app/actions";
 import type { InstitutionKind } from "@/types/domain";
 
 export default async function InstituicoesPage() {
   const user = await requirePageAdmin();
-  const { institutions, insurers } = await withRls(user.organizationId, user.id, async (db) => ({
+  const { institutions, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     institutions: await listInstitutions(db, user.organizationId),
     insurers: await listInsurers(db, user.organizationId),
   }));

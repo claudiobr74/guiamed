@@ -2,12 +2,12 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Card, EmptyState } from "@/components/ui";
 import { ImportCodesPanel } from "@/features/codes/ImportCodesPanel";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listCodes } from "@/lib/db/repos";
 
 export default async function TabelasPage() {
   const user = await requirePageAdmin();
-  const codes = await withRls(user.organizationId, user.id, (db) => listCodes(db, user.organizationId));
+  const codes = await withOrganizationContext(user.organizationId, user.id, (db) => listCodes(db, user.organizationId));
   return (
     <AppShell user={user} title="Tabelas TUSS / IPASGO">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">

@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input } from "@/components/ui";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listKits, listProcedures } from "@/lib/db/repos";
 import { saveKitAction } from "@/app/actions";
 
 export default async function KitsPage() {
   const user = await requirePageAdmin();
-  const { kits, procedures } = await withRls(user.organizationId, user.id, async (db) => ({
+  const { kits, procedures } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     kits: await listKits(db, user.organizationId),
     procedures: await listProcedures(db, user.organizationId),
   }));

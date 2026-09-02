@@ -19,6 +19,7 @@ import type {
   SurgicalRequest,
   TemplateVersion,
 } from "@/types/domain";
+import { parseQuantity } from "@/lib/quantity";
 
 function now() {
   return new Date().toISOString();
@@ -834,6 +835,8 @@ function mapCode(id: string, data: DocumentData): ProcedureCode {
     validUntil: data.validUntil ? String(data.validUntil).slice(0, 10) : null,
     version: String(data.version ?? ""),
     active: data.active !== false,
+    healthInsurerId: (data.healthInsurerId as string | null) ?? null,
+    defaultQuantity: parseQuantity(data.defaultQuantity),
     metadata: (data.metadata as ProcedureCode["metadata"]) ?? {},
   };
 }

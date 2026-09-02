@@ -7,12 +7,15 @@ export async function getDb(): Promise<Db> {
   return firebaseDb();
 }
 
-/** Acesso por organização é aplicado nas consultas (não é RLS do Postgres). */
-export async function withRls<T>(
-  _orgId: string | null,
-  _userId: string | null,
+/** Executa acesso server-side com identidade organizacional explícita. */
+export async function withOrganizationContext<T>(
+  organizationId: string,
+  userId: string,
   fn: (db: Db) => Promise<T>,
 ): Promise<T> {
+  if (!organizationId || !userId) {
+    throw new Error("Contexto da organização inválido.");
+  }
   const db = await getDb();
   return fn(db);
 }

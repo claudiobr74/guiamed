@@ -18,6 +18,7 @@ import {
   searchProceduresAction,
 } from "@/app/actions";
 import { parseQuantity } from "@/lib/quantity";
+import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
 
 const STEPS = ["Paciente", "Diagnóstico", "Procedimentos", "Justificativa", "Revisão"] as const;
 
@@ -375,8 +376,9 @@ export function RequestEditor({
                     type="button"
                     className="w-full px-3 py-2 text-left text-[13px] hover:bg-[#eff6ff]"
                     onClick={() => {
-                      const tuss = proc.codes.find((c) => c.codeSystem === "TUSS" && c.active) ?? null;
-                      const ipasgo = proc.codes.find((c) => c.codeSystem === "IPASGO" && c.active) ?? null;
+                      const resolutionDate = new Date();
+                      const tuss = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+                      const ipasgo = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });
                       patch({
                         items: [
                           ...request.items,
@@ -389,7 +391,11 @@ export function RequestEditor({
                             ipasgoCodeId: ipasgo?.id ?? null,
                             tussCodeSnapshot: tuss?.code ?? null,
                             ipasgoCodeSnapshot: ipasgo?.code ?? null,
-                            quantity: DEFAULT_PROCEDURE_QUANTITY,
+                            tussDescriptionSnapshot: tuss?.description ?? null,
+                            ipasgoDescriptionSnapshot: ipasgo?.description ?? null,
+                            tussVersionSnapshot: tuss?.version ?? null,
+                            ipasgoVersionSnapshot: ipasgo?.version ?? null,
+                            quantity: quantityForCodes(tuss, ipasgo),
                             laterality: null,
                             notes: null,
                             sortOrder: request.items.length,

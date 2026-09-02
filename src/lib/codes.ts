@@ -1,4 +1,5 @@
 import { CODE_NOT_FOUND, type ProcedureCode } from "@/types/domain";
+import { parseQuantity } from "@/lib/quantity";
 
 export interface CodeCatalogItem {
   id: string;
@@ -20,6 +21,56 @@ export function isCodeValidOn(item: CodeCatalogItem, at: Date): boolean {
   if (item.validFrom && new Date(item.validFrom) > at) return false;
   if (item.validUntil && new Date(item.validUntil) < at) return false;
   return true;
+}
+
+function versionParts(version: string): Array<string | number> {
+  return version.split(/([0-9]+)/).filter(Boolean).map((part) => /^\d+$/.test(part) ? Number(part) : part.toLocaleLowerCase("pt-BR"));
+}
+
+function compareVersionsDesc(a: string, b: string): number {
+  const left = versionParts(a);
+  const right = versionParts(b);
+  const size = Math.max(left.length, right.length);
+  for (let index = 0; index < size; index += 1) {
+    const av = left[index];
+    const bv = right[index];
+    if (av === bv) continue;
+    if (av === undefined) return 1;
+    if (bv === undefined) return -1;
+    if (typeof av === "number" && typeof bv === "number") return bv - av;
+    return String(bv).localeCompare(String(av), "pt-BR", { numeric: true });
+  }
+  return 0;
+}
+
+/** Resolve somente vínculos explícitos; nunca substitui um sistema por outro. */
+export function resolveProcedureCode(
+  codes: ProcedureCode[],
+  input: { procedureId: string; codeSystem: string; at?: Date; healthInsurerId?: string | null },
+): ProcedureCode | null {
+  const at = input.at ?? new Date();
+  const system = input.codeSystem.toUpperCase();
+  const candidates = codes.filter((code) =>
+    code.procedureId === input.procedureId &&
+    code.codeSystem.toUpperCase() === system &&
+    isCodeValidOn(code, at) &&
+    (code.healthInsurerId === null || code.healthInsurerId === input.healthInsurerId),
+  );
+
+  return candidates.toSorted((a, b) => {
+    const insurerPriority = Number(b.healthInsurerId !== null) - Number(a.healthInsurerId !== null);
+    if (insurerPriority !== 0) return insurerPriority;
+    const versionOrder = compareVersionsDesc(a.version, b.version);
+    if (versionOrder !== 0) return versionOrder;
+    const fromOrder = (b.validFrom ?? "").localeCompare(a.validFrom ?? "");
+    if (fromOrder !== 0) return fromOrder;
+    return a.id.localeCompare(b.id);
+  })[0] ?? null;
+}
+
+export function quantityForCodes(...codes: Array<ProcedureCode | null | undefined>): number {
+  const configured = codes.find((code) => code?.defaultQuantity !== undefined)?.defaultQuantity;
+  return parseQuantity(configured);
 }
 
 export function lookupCode(

@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listRequests } from "@/lib/db/repos";
 import { createRequestAction, duplicateRequestAction } from "@/app/actions";
 import Link from "next/link";
@@ -13,7 +13,7 @@ export default async function GuiasPage({
 }) {
   const user = await requirePageUser();
   const params = await searchParams;
-  const requests = await withRls(user.organizationId, user.id, (db) =>
+  const requests = await withOrganizationContext(user.organizationId, user.id, (db) =>
     listRequests(db, user.organizationId, {
       q: params.q,
       status: params.status === "draft" || params.status === "finalized" || params.status === "cancelled" ? params.status : undefined,

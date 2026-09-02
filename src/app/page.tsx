@@ -4,7 +4,7 @@ import { FileText, CheckCircle2, Clock3, CalendarDays } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { dashboardStats, listKits, listRequests } from "@/lib/db/repos";
 import { createRequestAction } from "@/app/actions";
 
@@ -22,7 +22,7 @@ function statusLabel(status: string) {
 
 export default async function DashboardPage() {
   const user = await requirePageUser();
-  const { stats, requests, kits } = await withRls(user.organizationId, user.id, async (db) => ({
+  const { stats, requests, kits } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     stats: await dashboardStats(db, user.organizationId),
     requests: await listRequests(db, user.organizationId, {}),
     kits: await listKits(db, user.organizationId),

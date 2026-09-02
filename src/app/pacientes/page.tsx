@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listInsurers, listPatients } from "@/lib/db/repos";
 import { savePatientAction } from "@/app/actions";
 
 export default async function PacientesPage() {
   const user = await requirePageUser();
-  const { patients, insurers } = await withRls(user.organizationId, user.id, async (db) => ({
+  const { patients, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     patients: await listPatients(db, user.organizationId),
     insurers: await listInsurers(db, user.organizationId),
   }));

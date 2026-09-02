@@ -102,6 +102,10 @@ export interface ProcedureCode {
   validUntil: string | null;
   version: string;
   active: boolean;
+  /** Operadora específica, quando o código não for geral. */
+  healthInsurerId: string | null;
+  /** Quantidade sugerida ao incluir este código. Legado sem campo equivale a 1. */
+  defaultQuantity: number;
   metadata: Record<string, string | number | boolean | null>;
 }
 
@@ -220,6 +224,10 @@ export interface RequestItem {
   ipasgoCodeId: string | null;
   tussCodeSnapshot: string | null;
   ipasgoCodeSnapshot: string | null;
+  tussDescriptionSnapshot?: string | null;
+  ipasgoDescriptionSnapshot?: string | null;
+  tussVersionSnapshot?: string | null;
+  ipasgoVersionSnapshot?: string | null;
   quantity: number;
   laterality: string | null;
   notes: string | null;

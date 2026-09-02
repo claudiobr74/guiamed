@@ -2,14 +2,14 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listInstitutions, listInsurers, listTemplates } from "@/lib/db/repos";
 import { uploadTemplateAction } from "@/app/actions";
 import { redirect } from "next/navigation";
 
 export default async function TemplatesPage() {
   const user = await requirePageAdmin();
-  const { templates, institutions, insurers } = await withRls(user.organizationId, user.id, async (db) => ({
+  const { templates, institutions, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     templates: await listTemplates(db, user.organizationId),
     institutions: await listInstitutions(db, user.organizationId),
     insurers: await listInsurers(db, user.organizationId),

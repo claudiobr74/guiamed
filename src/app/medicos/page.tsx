@@ -1,14 +1,14 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input } from "@/components/ui";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { listDoctors } from "@/lib/db/repos";
 import { saveDoctorAction } from "@/app/actions";
 import Link from "next/link";
 
 export default async function MedicosPage() {
   const user = await requirePageAdmin();
-  const doctors = await withRls(user.organizationId, user.id, (db) => listDoctors(db, user.organizationId));
+  const doctors = await withOrganizationContext(user.organizationId, user.id, (db) => listDoctors(db, user.organizationId));
   return (
     <AppShell user={user} title="Médicos">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
