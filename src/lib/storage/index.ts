@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { firebaseBucket, hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
 import {
@@ -68,6 +68,29 @@ export async function getObject(
   const full = path.join(LOCAL_ROOT, authorizedPath);
   const buf = await readFile(full);
   return new Uint8Array(buf);
+}
+
+export async function deleteObject(
+  filePath: string,
+  organizationId: string,
+): Promise<void> {
+  const authorizedPath = requireAuthorizedStoragePath(filePath, organizationId);
+  if (hasFirebaseAdminCredentials()) {
+    await firebaseBucket().file(authorizedPath).delete({ ignoreNotFound: true });
+    return;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
+  }
+  try {
+    await unlink(path.join(LOCAL_ROOT, authorizedPath));
+  } catch (error) {
+    const code =
+      typeof error === "object" && error && "code" in error
+        ? String((error as { code: unknown }).code)
+        : "";
+    if (code !== "ENOENT") throw error;
+  }
 }
 
 export function publicFileUrl(filePath: string): string {

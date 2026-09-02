@@ -606,14 +606,6 @@ export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequ
   }, { merge: true });
 }
 
-export async function finalizeRequest(db: Db, user: SessionUser, requestId: string): Promise<void> {
-  const snap = await orgCollection(db, user.organizationId, "requests").doc(requestId).get();
-  if (!snap.exists) throw new Error("Solicitação não encontrada.");
-  if (snap.data()?.status !== "draft") throw new Error("Somente rascunhos podem ser finalizados.");
-  await snap.ref.set({ status: "finalized", finalizedAt: now(), updatedAt: now() }, { merge: true });
-  await audit(db, user, "finalize", "surgical_request", requestId, {});
-}
-
 export async function cancelRequest(db: Db, user: SessionUser, requestId: string): Promise<void> {
   await orgCollection(db, user.organizationId, "requests").doc(requestId).set(
     { status: "cancelled", updatedAt: now() },
@@ -639,24 +631,68 @@ export async function duplicateRequest(db: Db, user: SessionUser, requestId: str
   return id;
 }
 
-export async function saveGeneratedDocument(
+export async function finalizeWithGeneratedDocument(
   db: Db,
   user: SessionUser,
-  data: { requestId: string; templateVersionId: string; filePath: string; fileHash: string },
+  data: {
+    requestId: string;
+    templateVersionId: string;
+    expectedRequestUpdatedAt: string;
+    filePath: string;
+    fileHash: string;
+  },
 ): Promise<GeneratedDocument> {
-  const ref = orgCollection(db, user.organizationId, "generatedDocuments").doc();
+  const requestRef = orgCollection(db, user.organizationId, "requests").doc(data.requestId);
+  const documentRef = orgCollection(db, user.organizationId, "generatedDocuments").doc();
+  const finalizeAuditRef = orgCollection(db, user.organizationId, "auditLogs").doc();
+  const generateAuditRef = orgCollection(db, user.organizationId, "auditLogs").doc();
   const createdAt = now();
-  await ref.set({
-    requestId: data.requestId,
-    templateVersionId: data.templateVersionId,
-    filePath: data.filePath,
-    fileHash: data.fileHash,
-    createdAt,
-    createdBy: user.id,
+
+  await db.runTransaction(async (transaction) => {
+    const request = await transaction.get(requestRef);
+    if (!request.exists) throw new Error("Solicitação não encontrada.");
+    if (request.data()?.status !== "draft") {
+      throw new Error("Somente rascunhos podem ser finalizados.");
+    }
+    if (String(request.data()?.updatedAt ?? "") !== data.expectedRequestUpdatedAt) {
+      throw new Error(
+        "A solicitação foi alterada durante a geração. Revise os dados e tente novamente.",
+      );
+    }
+
+    transaction.set(documentRef, {
+      requestId: data.requestId,
+      templateVersionId: data.templateVersionId,
+      filePath: data.filePath,
+      fileHash: data.fileHash,
+      createdAt,
+      createdBy: user.id,
+    });
+    transaction.set(
+      requestRef,
+      { status: "finalized", finalizedAt: createdAt, updatedAt: createdAt },
+      { merge: true },
+    );
+    transaction.set(finalizeAuditRef, {
+      userId: user.id,
+      action: "finalize",
+      entityType: "surgical_request",
+      entityId: data.requestId,
+      metadata: {},
+      createdAt,
+    });
+    transaction.set(generateAuditRef, {
+      userId: user.id,
+      action: "generate_pdf",
+      entityType: "generated_document",
+      entityId: documentRef.id,
+      metadata: { requestId: data.requestId },
+      createdAt,
+    });
   });
-  await audit(db, user, "generate_pdf", "generated_document", ref.id, { requestId: data.requestId });
+
   return {
-    id: ref.id,
+    id: documentRef.id,
     requestId: data.requestId,
     templateVersionId: data.templateVersionId,
     filePath: data.filePath,
@@ -667,7 +703,9 @@ export async function saveGeneratedDocument(
 }
 
 export async function listGenerated(db: Db, orgId: string, requestId: string): Promise<GeneratedDocument[]> {
-  const snap = await orgCollection(db, orgId, "generatedDocuments").get();
+  const snap = await orgCollection(db, orgId, "generatedDocuments")
+    .where("requestId", "==", requestId)
+    .get();
   return snap.docs
     .map((doc) => {
       const data = doc.data();
@@ -681,7 +719,6 @@ export async function listGenerated(db: Db, orgId: string, requestId: string): P
         createdBy: (data.createdBy as string | null) ?? null,
       } satisfies GeneratedDocument;
     })
-    .filter((doc) => doc.requestId === requestId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -829,4 +866,3 @@ function mapVersion(id: string, data: DocumentData): TemplateVersion {
     createdBy: (data.createdBy as string | null) ?? null,
   };
 }
-

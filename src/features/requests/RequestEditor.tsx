@@ -11,7 +11,6 @@ import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";
 import {
   duplicateRequestAction,
   generatePdfAction,
-  previewPdfAction,
   savePatientAction,
   saveRequestAction,
   searchCidsAction,
@@ -77,15 +76,17 @@ export function RequestEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
 
-  async function persist() {
+  async function persist(): Promise<boolean> {
     setSaveState("saving");
     try {
       await saveRequestAction(request);
       setSaveState("saved");
       setSaveError(null);
+      return true;
     } catch (error) {
       setSaveState("error");
       setSaveError(error instanceof Error ? error.message : "Erro ao salvar");
+      return false;
     }
   }
 
@@ -96,7 +97,7 @@ export function RequestEditor({
   async function onGenerate() {
     setBusy(true);
     try {
-      await persist();
+      if (!(await persist())) return;
       const doc = await generatePdfAction(request.id);
       router.push(`/guias/${request.id}/preview?doc=${doc.id}`);
     } catch (error) {
@@ -141,8 +142,7 @@ export function RequestEditor({
             onClick={async () => {
               setBusy(true);
               try {
-                await persist();
-                await previewPdfAction(request.id);
+                if (!(await persist())) return;
                 router.push(`/guias/${request.id}/preview`);
               } catch (error) {
                 setSaveError(error instanceof Error ? error.message : "Não foi possível gerar o preview.");

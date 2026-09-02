@@ -9,9 +9,10 @@ import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRo
 import { summarizeImportDiff } from "@/lib/import-diff";
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
 import { inspectPdf } from "@/lib/pdf/inspect";
-import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
-import { putObject, getObject } from "@/lib/storage";
+import { renderRequestPdf } from "@/lib/pdf/render-request";
+import { deleteObject, putObject } from "@/lib/storage";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
+import { randomUUID } from "node:crypto";
 import type {
   Doctor,
   FieldMapping,
@@ -281,53 +282,33 @@ export async function saveRepeaterAction(repeater: Omit<PdfRepeater, "id"> & { i
   );
 }
 
-export async function generatePdfAction(requestId: string, options?: { finalize?: boolean }) {
+export async function generatePdfAction(requestId: string) {
   const user = await requireUser();
-  const shouldFinalize = options?.finalize ?? true;
   return withRls(user.organizationId, user.id, async (db) => {
-    const request = await repos.hydrateRequest(db, user.organizationId, requestId);
-    if (!request.templateVersionId) {
-      throw new Error("Selecione um template antes de gerar o PDF.");
-    }
-    const version = await repos.getTemplateVersion(db, user.organizationId, request.templateVersionId);
-    if (!version) throw new Error("Versão do template não encontrada.");
-    const mappings = await repos.listMappings(db, user.organizationId, version.id);
-    const repeaters = await repos.listRepeaters(db, user.organizationId, version.id);
-    const errors = validateRequestForPdf(request, mappings);
-    if (errors.length > 0) throw new Error(errors[0]);
-    const templateBytes = await getObject(version.filePath, user.organizationId);
-    let signatureBytes: Uint8Array | null = null;
-    if (request.doctor?.signatureFile) {
-      signatureBytes = await getObject(request.doctor.signatureFile, user.organizationId);
-    }
-    const filled = await fillPdf({
-      templateBytes,
-      request,
-      mappings,
-      repeaters,
-      signatureBytes,
-    });
+    const rendered = await renderRequestPdf(db, user, requestId);
     const stored = await putObject(
       "generated-documents",
       user.organizationId,
-      `${requestId}.pdf`,
-      filled.bytes,
+      `${requestId}-${randomUUID()}.pdf`,
+      rendered.bytes,
     );
-    if (shouldFinalize && request.status === "draft") {
-      await repos.finalizeRequest(db, user, requestId);
+    try {
+      return await repos.finalizeWithGeneratedDocument(db, user, {
+        requestId,
+        templateVersionId: rendered.templateVersionId,
+        expectedRequestUpdatedAt: rendered.requestUpdatedAt,
+        filePath: stored.filePath,
+        fileHash: stored.fileHash,
+      });
+    } catch (error) {
+      try {
+        await deleteObject(stored.filePath, user.organizationId);
+      } catch (cleanupError) {
+        console.error("Falha ao remover PDF órfão após erro de finalização", cleanupError);
+      }
+      throw error;
     }
-    const doc = await repos.saveGeneratedDocument(db, user, {
-      requestId,
-      templateVersionId: version.id,
-      filePath: stored.filePath,
-      fileHash: stored.fileHash,
-    });
-    return doc;
   });
-}
-
-export async function previewPdfAction(requestId: string) {
-  return generatePdfAction(requestId, { finalize: false });
 }
 
 export async function listRequestsAction(filters: { q?: string; status?: RequestStatus; from?: string; to?: string }) {

@@ -8,9 +8,16 @@ import { publicFileUrl } from "@/lib/storage";
 import { notFound } from "next/navigation";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
-export default async function PreviewPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PreviewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ doc?: string }>;
+}) {
   const user = await requirePageUser();
   const { id } = await params;
+  const { doc: selectedDocumentId } = await searchParams;
   const data = await withRls(user.organizationId, user.id, async (db) => {
     try {
       return {
@@ -22,7 +29,15 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
     }
   });
   if (!data) notFound();
-  const latest = data.docs[0];
+  const selectedDocument = selectedDocumentId
+    ? data.docs.find((document) => document.id === selectedDocumentId)
+    : data.docs[0];
+  const pdfUrl =
+    data.request.status === "draft"
+      ? `/api/guias/${encodeURIComponent(id)}/preview`
+      : selectedDocument
+        ? publicFileUrl(selectedDocument.filePath)
+        : null;
   return (
     <AppShell user={user} title="Preview do PDF">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -45,15 +60,19 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
         </Card>
         <Card>
           <h2 className="mb-3 text-[14px] font-bold">PDF preenchido</h2>
-          {latest ? (
+          {pdfUrl ? (
             <div className="flex flex-col gap-3">
-              <iframe title="PDF gerado" className="h-[640px] w-full rounded-lg border border-[#e2e8f0]" src={publicFileUrl(latest.filePath)} />
-              <a href={publicFileUrl(latest.filePath)} download>
-                <Button type="button">Baixar PDF</Button>
+              <iframe title="PDF gerado" className="h-[640px] w-full rounded-lg border border-[#e2e8f0]" src={pdfUrl} />
+              <a href={pdfUrl} download>
+                <Button type="button">
+                  {data.request.status === "draft" ? "Baixar prévia" : "Baixar PDF"}
+                </Button>
               </a>
             </div>
           ) : (
-            <p className="text-[13px] text-[#475569]">Nenhum PDF gerado ainda. Finalize a solicitação para preencher o arquivo original.</p>
+            <p className="text-[13px] text-[#475569]">
+              O documento finalizado não possui um PDF armazenado. Duplique a solicitação para gerar uma nova versão auditável.
+            </p>
           )}
         </Card>
       </div>
