@@ -295,10 +295,10 @@ export async function generatePdfAction(requestId: string, options?: { finalize?
     const repeaters = await repos.listRepeaters(db, user.organizationId, version.id);
     const errors = validateRequestForPdf(request, mappings);
     if (errors.length > 0) throw new Error(errors[0]);
-    const templateBytes = await getObject(version.filePath);
+    const templateBytes = await getObject(version.filePath, user.organizationId);
     let signatureBytes: Uint8Array | null = null;
     if (request.doctor?.signatureFile) {
-      signatureBytes = await getObject(request.doctor.signatureFile);
+      signatureBytes = await getObject(request.doctor.signatureFile, user.organizationId);
     }
     const filled = await fillPdf({
       templateBytes,

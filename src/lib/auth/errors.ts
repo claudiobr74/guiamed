@@ -12,6 +12,9 @@ export function toUserFacingAuthError(err: unknown): string {
   if (/NOT_FOUND|5 NOT_FOUND|database \(default\) does not exist|does not exist for project/i.test(message)) {
     return "O Firestore do projeto guiamed-918ee não está disponível. Confira FIRESTORE_DATABASE_ID e o banco Native do projeto.";
   }
+  if (/não possui um perfil ativo/.test(message)) {
+    return message;
+  }
   if (/E-mail ou senha inválidos|Já existe um usuário|Informe o e-mail/.test(message)) {
     return message;
   }

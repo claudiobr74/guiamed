@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { encodeSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from "@/lib/auth/session";
 import { toUserFacingAuthError } from "@/lib/auth/errors";
 import { loginWithPassword, registerOrganization, requestPasswordReset } from "@/lib/db/auth";
 
@@ -15,7 +15,7 @@ async function setSessionCookie(token: string) {
     sameSite: "lax",
     path: "/",
     secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 14,
+    maxAge: SESSION_TTL_SECONDS,
   });
 }
 

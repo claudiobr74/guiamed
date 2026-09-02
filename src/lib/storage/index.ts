@@ -2,10 +2,15 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { firebaseBucket, hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
+import {
+  buildStoragePath,
+  requireAuthorizedStoragePath,
+  type StorageBucket,
+} from "@/lib/storage/path";
+
+export type { StorageBucket } from "@/lib/storage/path";
 
 const LOCAL_ROOT = path.join(process.cwd(), "data", "storage");
-
-export type StorageBucket = "pdf-templates" | "generated-documents" | "signatures";
 
 function contentTypeFor(filename: string): string {
   const lower = filename.toLowerCase();
@@ -23,7 +28,7 @@ export async function putObject(
   bytes: Uint8Array,
 ): Promise<{ filePath: string; fileHash: string }> {
   const hash = createHash("sha256").update(bytes).digest("hex");
-  const relative = path.posix.join(bucket, organizationId, `${hash}-${filename}`);
+  const relative = buildStoragePath(bucket, organizationId, `${hash}-${filename}`);
   if (hasFirebaseAdminCredentials()) {
     await firebaseBucket()
       .file(relative)
@@ -48,15 +53,19 @@ export async function putObject(
   return { filePath: relative, fileHash: hash };
 }
 
-export async function getObject(filePath: string): Promise<Uint8Array> {
+export async function getObject(
+  filePath: string,
+  organizationId: string,
+): Promise<Uint8Array> {
+  const authorizedPath = requireAuthorizedStoragePath(filePath, organizationId);
   if (hasFirebaseAdminCredentials()) {
-    const [buf] = await firebaseBucket().file(filePath).download();
+    const [buf] = await firebaseBucket().file(authorizedPath).download();
     return new Uint8Array(buf);
   }
   if (process.env.NODE_ENV === "production") {
     throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
   }
-  const full = path.join(LOCAL_ROOT, filePath);
+  const full = path.join(LOCAL_ROOT, authorizedPath);
   const buf = await readFile(full);
   return new Uint8Array(buf);
 }

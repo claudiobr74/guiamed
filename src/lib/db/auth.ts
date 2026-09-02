@@ -2,41 +2,26 @@ import { firebaseAuth } from "@/lib/firebase/admin";
 import { firebaseWebApiKey } from "@/lib/firebase/config";
 import { normalizeEmail } from "@/lib/auth/email";
 import { getDb } from "@/lib/db/client";
-import type { Profile, SessionUser, UserRole } from "@/types/domain";
+import { activeProfileToSession } from "@/lib/auth/profile";
+import type { Profile, SessionUser } from "@/types/domain";
 
-interface AuthProfile {
-  organizationId: string;
-  role: UserRole;
-  fullName: string;
-  email: string;
-  active: boolean;
-}
+const ACCOUNT_PROFILE_ERROR =
+  "Esta conta não possui um perfil ativo no GuiaMed. Solicite acesso a um administrador.";
 
-function toSession(id: string, data: AuthProfile): SessionUser {
-  return {
-    id,
-    organizationId: data.organizationId,
-    role: data.role,
-    fullName: data.fullName,
-    email: data.email,
-  };
-}
-
-async function provisionAdminProfile(input: {
+async function provisionOrganizationOwner(input: {
   uid: string;
   email: string;
   fullName: string;
   organizationName: string;
-  role?: UserRole;
 }): Promise<SessionUser> {
   const db = await getDb();
   const existing = await db.collection("users").doc(input.uid).get();
   if (existing.exists) {
-    const data = existing.data() as AuthProfile | undefined;
-    if (data?.active) return toSession(input.uid, data);
+    const session = activeProfileToSession(input.uid, existing.data());
+    if (session) return session;
+    throw new Error(ACCOUNT_PROFILE_ERROR);
   }
   const now = new Date().toISOString();
-  const role = input.role ?? "admin";
   const orgRef = db.collection("organizations").doc();
   await orgRef.set({
     name: input.organizationName || "Clínica",
@@ -47,16 +32,16 @@ async function provisionAdminProfile(input: {
     createdAt: now,
     updatedAt: now,
   });
-  const profile: AuthProfile & { createdAt: string } = {
+  const profile = {
     organizationId: orgRef.id,
-    role,
+    role: "admin" as const,
     fullName: input.fullName || input.email,
     email: input.email,
     active: true,
     createdAt: now,
   };
   await db.collection("users").doc(input.uid).set(profile);
-  return toSession(input.uid, profile);
+  return activeProfileToSession(input.uid, profile)!;
 }
 
 export async function registerOrganization(input: {
@@ -64,7 +49,6 @@ export async function registerOrganization(input: {
   fullName: string;
   email: string;
   password: string;
-  role?: UserRole;
 }): Promise<SessionUser> {
   const email = normalizeEmail(input.email);
   const db = await getDb();
@@ -89,12 +73,11 @@ export async function registerOrganization(input: {
     uid = signedIn;
   }
 
-  return provisionAdminProfile({
+  return provisionOrganizationOwner({
     uid,
     email,
     fullName: input.fullName,
     organizationName: input.organizationName,
-    role: input.role,
   });
 }
 
@@ -119,15 +102,9 @@ export async function loginWithPassword(email: string, password: string): Promis
   if (!uid) throw new Error("E-mail ou senha inválidos.");
   const db = await getDb();
   const snap = await db.collection("users").doc(uid).get();
-  const data = snap.data() as AuthProfile | undefined;
-  if (snap.exists && data?.active) return toSession(uid, data);
-  const record = await firebaseAuth().getUser(uid);
-  return provisionAdminProfile({
-    uid,
-    email: normalized,
-    fullName: record.displayName || normalized,
-    organizationName: "Clínica",
-  });
+  const session = snap.exists ? activeProfileToSession(uid, snap.data()) : null;
+  if (!session) throw new Error(ACCOUNT_PROFILE_ERROR);
+  return session;
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
@@ -143,16 +120,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   const db = await getDb();
   const snap = await db.collection("users").doc(userId).get();
   if (!snap.exists) return null;
-  const data = snap.data();
-  if (!data) return null;
-  const role = data.role as UserRole;
-  if (role !== "admin" && role !== "doctor") return null;
-  return {
-    id: snap.id,
-    organizationId: String(data.organizationId ?? ""),
-    role,
-    fullName: String(data.fullName ?? ""),
-    email: String(data.email ?? ""),
-    active: data.active !== false,
-  };
+  const session = activeProfileToSession(snap.id, snap.data());
+  if (!session) return null;
+  return { ...session, active: true };
 }

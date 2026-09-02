@@ -14,6 +14,14 @@ describe("toUserFacingAuthError", () => {
     );
   });
 
+  it("explica quando a conta autenticada não possui perfil ativo", () => {
+    expect(
+      toUserFacingAuthError(
+        new Error("Esta conta não possui um perfil ativo no GuiaMed. Solicite acesso a um administrador."),
+      ),
+    ).toMatch(/perfil ativo/);
+  });
+
   it("preserva credencial inválida de login", () => {
     expect(toUserFacingAuthError(new Error("E-mail ou senha inválidos."))).toBe("E-mail ou senha inválidos.");
   });
