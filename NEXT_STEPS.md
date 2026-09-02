@@ -6,7 +6,7 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último teste: `vitest run` — 65/65 PASS.
+- Último teste: `vitest run` — 68/68 PASS.
 - Gates locais: lint PASS; typecheck PASS. O primeiro commit passou também no CI e build remotos; o próximo commit deve ser novamente validado pelo CI.
 
 ## Concluído neste checkpoint
@@ -24,10 +24,13 @@ Atualizado em: 2026-09-02
 - reimportação preserva vínculo, operadora e quantidade existentes e não confirma vínculo automaticamente;
 - template filtrado/invalidationado por instituição e convênio, com seleção automática quando único;
 - novo paciente propaga o convênio para a guia.
+- autosave serializado com revisão monotônica e reenvio de alterações feitas durante uma gravação;
+- gravações atrasadas agora falham com `REQUEST_CHANGED` em vez de sobrescrever estado novo;
+- resposta do autosave devolve itens materializados pelo servidor.
 
 ## Próxima tarefa exata
 
-Implementar concorrência otimista do autosave com revisão monotônica e retornar o rascunho materializado ao cliente. Depois persistir confirmação médica e snapshot histórico consolidado na transação de finalização.
+Persistir confirmação médica e snapshot histórico consolidado na transação de finalização. Em seguida corrigir o isolamento cross-tenant de `createTemplateVersion` e restringir download por recurso.
 
 Arquivos principais:
 

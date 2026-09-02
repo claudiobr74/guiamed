@@ -18,6 +18,7 @@ function request(items: number): SurgicalRequest {
     clinicalJustification: "indicação informada",
     clinicalNotes: null,
     status: "draft",
+    revision: 0,
     createdBy: "u1",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

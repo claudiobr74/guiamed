@@ -256,6 +256,8 @@ export interface SurgicalRequest {
   clinicalJustification: string | null;
   clinicalNotes: string | null;
   status: RequestStatus;
+  /** Revisão monotônica usada para impedir autosave fora de ordem. */
+  revision: number;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

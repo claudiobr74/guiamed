@@ -120,8 +120,8 @@ export async function saveRequestAction(request: SurgicalRequest) {
     ...request,
     cids: normalizeRequestCids(request.cids, request.id),
   };
-  await withOrganizationContext(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
-  return { ok: true as const };
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
+  return { ok: true as const, ...saved };
 }
 
 export async function duplicateRequestAction(id: string) {

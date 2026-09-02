@@ -21,6 +21,7 @@ import type {
 } from "@/types/domain";
 import { parseQuantity } from "@/lib/quantity";
 import { materializeRequestItems } from "@/lib/requests/materialize-items";
+import { nextRequestRevision } from "@/lib/requests/revision";
 
 function now() {
   return new Date().toISOString();
@@ -536,6 +537,7 @@ export async function hydrateRequest(db: Db, orgId: string, id: string): Promise
     clinicalJustification: (data.clinicalJustification as string | null) ?? null,
     clinicalNotes: (data.clinicalNotes as string | null) ?? null,
     status: (data.status as RequestStatus) ?? "draft",
+    revision: Number(data.revision ?? 0),
     createdBy: (data.createdBy as string | null) ?? null,
     createdAt: String(data.createdAt ?? now()),
     updatedAt: String(data.updatedAt ?? now()),
@@ -565,6 +567,7 @@ export async function createDraft(db: Db, user: SessionUser): Promise<string> {
     clinicalJustification: null,
     clinicalNotes: null,
     status: "draft",
+    revision: 0,
     createdBy: user.id,
     createdAt: now(),
     updatedAt: now(),
@@ -577,12 +580,7 @@ export async function createDraft(db: Db, user: SessionUser): Promise<string> {
   return ref.id;
 }
 
-export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequest): Promise<void> {
-  const snap = await orgCollection(db, user.organizationId, "requests").doc(request.id).get();
-  if (!snap.exists) throw new Error("Solicitação não encontrada.");
-  if (snap.data()?.status !== "draft") {
-    throw new Error("Documento finalizado não pode ser alterado. Duplique para criar uma nova versão.");
-  }
+export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequest): Promise<{ updatedAt: string; revision: number; items: SurgicalRequest["items"] }> {
   const procedures = await listProcedures(db, user.organizationId);
   const codes = procedures.flatMap((procedure) => procedure.codes);
   const items = materializeRequestItems({
@@ -592,20 +590,32 @@ export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequ
     codes,
     healthInsurerId: request.healthInsurerId,
   });
-  await orgCollection(db, user.organizationId, "requests").doc(request.id).set({
-    patientId: request.patientId,
-    doctorId: request.doctorId,
-    institutionId: request.institutionId,
-    healthInsurerId: request.healthInsurerId,
-    templateId: request.templateId,
-    templateVersionId: request.templateVersionId,
-    diagnosis: request.diagnosis,
-    clinicalJustification: request.clinicalJustification,
-    clinicalNotes: request.clinicalNotes,
-    items,
-    cids: request.cids,
-    updatedAt: now(),
-  }, { merge: true });
+  const requestRef = orgCollection(db, user.organizationId, "requests").doc(request.id);
+  const updatedAt = now();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(requestRef);
+    if (!snap.exists) throw new Error("Solicitação não encontrada.");
+    if (snap.data()?.status !== "draft") {
+      throw new Error("Documento finalizado não pode ser alterado. Duplique para criar uma nova versão.");
+    }
+    const revision = nextRequestRevision(request.revision, snap.data()?.revision);
+    transaction.set(requestRef, {
+      patientId: request.patientId,
+      doctorId: request.doctorId,
+      institutionId: request.institutionId,
+      healthInsurerId: request.healthInsurerId,
+      templateId: request.templateId,
+      templateVersionId: request.templateVersionId,
+      diagnosis: request.diagnosis,
+      clinicalJustification: request.clinicalJustification,
+      clinicalNotes: request.clinicalNotes,
+      items,
+      cids: request.cids,
+      revision,
+      updatedAt,
+    }, { merge: true });
+  });
+  return { updatedAt, revision: request.revision + 1, items };
 }
 
 export async function cancelRequest(db: Db, user: SessionUser, requestId: string): Promise<void> {
@@ -621,6 +631,7 @@ export async function duplicateRequest(db: Db, user: SessionUser, requestId: str
   const id = await createDraft(db, user);
   source.id = id;
   source.status = "draft";
+  source.revision = 0;
   source.duplicatedFromId = requestId;
   source.finalizedAt = null;
   await saveDraft(db, user, source);

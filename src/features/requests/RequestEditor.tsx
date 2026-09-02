@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CODE_NOT_FOUND, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
 import { Badge, Button, Card, Field, Input, QuantityStepper, Select, Textarea } from "@/components/ui";
@@ -60,6 +60,11 @@ export function RequestEditor({
   const [showGenerate, setShowGenerate] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRef = useRef(initial);
+  const saveInFlight = useRef<Promise<boolean> | null>(null);
+  const saveQueued = useRef(false);
+  const skipAutosave = useRef(false);
+  const clientSequence = useRef(0);
 
   const selectedPatient = useMemo(
     () => patients.find((p) => p.id === request.patientId) ?? patientResults.find((p) => p.id === request.patientId) ?? request.patient,
@@ -77,8 +82,52 @@ export function RequestEditor({
     [kitProcedures],
   );
 
+  const persist = useCallback(async (): Promise<boolean> => {
+    if (saveInFlight.current) {
+      saveQueued.current = true;
+      return saveInFlight.current;
+    }
+    const run = async () => {
+      do {
+        saveQueued.current = false;
+        const snapshot = requestRef.current;
+        const sequence = clientSequence.current;
+        setSaveState("saving");
+        try {
+          const saved = await saveRequestAction(snapshot);
+          const hasNewerClientChanges = clientSequence.current !== sequence;
+          const next = {
+            ...requestRef.current,
+            updatedAt: saved.updatedAt,
+            revision: saved.revision,
+            items: hasNewerClientChanges ? requestRef.current.items : saved.items,
+          };
+          requestRef.current = next;
+          skipAutosave.current = !hasNewerClientChanges;
+          setRequest(next);
+          setSaveState("saved");
+          setSaveError(null);
+          if (hasNewerClientChanges) saveQueued.current = true;
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(error instanceof Error ? error.message : "Erro ao salvar");
+          return false;
+        }
+      } while (saveQueued.current);
+      return true;
+    };
+    saveInFlight.current = run().finally(() => {
+      saveInFlight.current = null;
+    });
+    return saveInFlight.current;
+  }, []);
+
   useEffect(() => {
     if (request.status !== "draft") return;
+    if (skipAutosave.current) {
+      skipAutosave.current = false;
+      return;
+    }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       void persist();
@@ -86,25 +135,14 @@ export function RequestEditor({
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request]);
-
-  async function persist(): Promise<boolean> {
-    setSaveState("saving");
-    try {
-      await saveRequestAction(request);
-      setSaveState("saved");
-      setSaveError(null);
-      return true;
-    } catch (error) {
-      setSaveState("error");
-      setSaveError(error instanceof Error ? error.message : "Erro ao salvar");
-      return false;
-    }
-  }
+  }, [persist, request]);
 
   function patch(partial: Partial<SurgicalRequest>) {
-    setRequest((prev) => ({ ...prev, ...partial }));
+    clientSequence.current += 1;
+    const next = { ...requestRef.current, ...partial };
+    requestRef.current = next;
+    setRequest(next);
+    if (saveInFlight.current) saveQueued.current = true;
   }
 
   function applyTemplateContext(institutionId: string | null, healthInsurerId: string | null) {
