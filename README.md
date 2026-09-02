@@ -6,7 +6,9 @@ Aplicação web para preenchimento de guias e documentos cirúrgicos a partir do
 
 - Next.js 16 (App Router) + TypeScript + Tailwind 4
 - Firebase (projeto `guiamed-918ee`): Authentication, Cloud Firestore e Storage
+- Vercel (web) e GitHub (PR + CI)
 - pdf-lib (escrita) e PDF.js (editor visual)
+- Regras do produto em `AGENTS.md` e `.cursor/rules/`
 
 ## Desenvolvimento
 

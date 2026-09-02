@@ -3,7 +3,14 @@ import type { SessionUser } from "@/types/domain";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
 
 function secret(): string {
-  return process.env.SESSION_SECRET ?? "guiamed-dev-session-secret-change-me";
+  const value = process.env.SESSION_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    if (!value) {
+      throw new Error("SESSION_SECRET é obrigatório em produção.");
+    }
+    return value;
+  }
+  return value || "guiamed-dev-session-secret-change-me";
 }
 
 export function encodeSession(user: SessionUser): string {

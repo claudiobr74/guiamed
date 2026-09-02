@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Card } from "@/components/ui";
-import { requirePageUser } from "@/lib/auth/page";
+import { requirePageAdmin } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { getOrganization } from "@/lib/db/repos";
 import { firebaseReadyMessage } from "@/lib/firebase/admin";
 
 export default async function ConfigPage() {
-  const user = await requirePageUser();
+  const user = await requirePageAdmin();
   const org = await withRls(user.organizationId, user.id, (db) =>
     getOrganization(db, user.organizationId),
   );

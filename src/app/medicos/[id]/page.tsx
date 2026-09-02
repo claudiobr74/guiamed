@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, Field, Input } from "@/components/ui";
-import { requirePageUser } from "@/lib/auth/page";
+import { requirePageAdmin } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { getDoctor } from "@/lib/db/repos";
 import { saveDoctorAction } from "@/app/actions";
 import { notFound } from "next/navigation";
 
 export default async function MedicoPerfilPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requirePageUser();
+  const user = await requirePageAdmin();
   const { id } = await params;
   const doctor = await withRls(user.organizationId, user.id, (db) => getDoctor(db, user.organizationId, id));
   if (!doctor) notFound();

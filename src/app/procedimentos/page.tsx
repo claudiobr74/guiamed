@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input } from "@/components/ui";
-import { requirePageUser } from "@/lib/auth/page";
+import { requirePageAdmin } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { listProcedures } from "@/lib/db/repos";
 import { saveProcedureAction } from "@/app/actions";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
 export default async function ProcedimentosPage() {
-  const user = await requirePageUser();
+  const user = await requirePageAdmin();
   const procedures = await withRls(user.organizationId, user.id, (db) => listProcedures(db, user.organizationId));
   return (
     <AppShell user={user} title="Procedimentos">

@@ -1,0 +1,17 @@
+---
+description: Gates de teste e release do GuiaMed.
+globs: "{**/*.{test,spec}.ts,vitest.config.ts,.github/workflows/**,package.json}"
+alwaysApply: false
+---
+
+# Testes e release
+
+Gates obrigatórios antes de concluir:
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+Testes de domínio cobrem quantidade, lookup de códigos (sem invenção), importação idempotente e preenchimento de PDF.
+
+Não declarar "concluído" se algum gate falhar. UI exige verificação no browser ou substituto documentado (curl/testes).

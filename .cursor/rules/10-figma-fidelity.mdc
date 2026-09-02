@@ -1,0 +1,18 @@
+---
+description: Fidelidade ao Figma oficial do GuiaMed (tokens, layout, copy, fluxos).
+globs: src/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# Figma
+
+Fonte visual: `https://www.figma.com/design/HtieMr0OFOgb3EYa3jCAlL/GuiaMed` (fileKey `HtieMr0OFOgb3EYa3jCAlL`).
+
+Antes de implementar ou alterar UI, use a skill `implement-from-figma` e `get_design_context` no node alvo.
+
+Tokens obrigatórios:
+- Fonte: Geist
+- Primária `#1E5FA6`, fundo suave `#EFF6FF`
+- Texto `#0F172A`, muted `#475569`, borda `#E2E8F0`, fundo `#F8FAFC`
+
+Não redesenhe telas. Reutilize `src/components/ui.tsx`, `AppShell` e `Sidebar`. Copy em português brasileiro. Ícones e imagens vêm do Figma, não inventados.

@@ -1,0 +1,20 @@
+---
+description: Engenharia central do GuiaMed — não recriar, não destruir, auditar antes de alterar.
+alwaysApply: true
+---
+
+# Engenharia
+
+Antes de alterar código:
+1. leia a estrutura atual do repositório;
+2. leia as regras aplicáveis em `.cursor/rules/`;
+3. preserve Next.js 16, React 19, TypeScript, Tailwind 4 e Firebase (`guiamed-918ee`);
+4. não recrie o projeto;
+5. não apague funcionalidades funcionais;
+6. não faça alterações destrutivas sem necessidade comprovada.
+
+Stack operacional fixa: Figma + Firebase + Vercel + GitHub.
+
+Para tarefas não triviais: auditar → planejar → implementar → testar → revisar diff → verificar → relatar só fatos comprovados.
+
+Nunca declarar "concluído" sem `pnpm lint`, `pnpm typecheck`, `pnpm test` e `pnpm build` (quando o change toca a aplicação).

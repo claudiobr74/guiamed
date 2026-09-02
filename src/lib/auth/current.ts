@@ -1,10 +1,26 @@
 import { cookies } from "next/headers";
 import { decodeSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { getProfile } from "@/lib/db/auth";
+import { hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
 import type { SessionUser } from "@/types/domain";
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const store = await cookies();
-  return decodeSession(store.get(SESSION_COOKIE)?.value);
+  const session = decodeSession(store.get(SESSION_COOKIE)?.value);
+  if (!session) return null;
+  if (!hasFirebaseAdminCredentials()) {
+    return process.env.NODE_ENV === "production" ? null : session;
+  }
+  const profile = await getProfile(session.id);
+  if (!profile || !profile.active) return null;
+  if (profile.organizationId !== session.organizationId) return null;
+  return {
+    id: session.id,
+    organizationId: profile.organizationId,
+    role: profile.role,
+    fullName: profile.fullName,
+    email: profile.email,
+  };
 }
 
 export async function requireUser(): Promise<SessionUser> {

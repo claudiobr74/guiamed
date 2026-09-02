@@ -38,6 +38,8 @@ export async function putObject(
           },
         },
       });
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
   } else {
     const full = path.join(LOCAL_ROOT, relative);
     await mkdir(path.dirname(full), { recursive: true });
@@ -50,6 +52,9 @@ export async function getObject(filePath: string): Promise<Uint8Array> {
   if (hasFirebaseAdminCredentials()) {
     const [buf] = await firebaseBucket().file(filePath).download();
     return new Uint8Array(buf);
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
   }
   const full = path.join(LOCAL_ROOT, filePath);
   const buf = await readFile(full);

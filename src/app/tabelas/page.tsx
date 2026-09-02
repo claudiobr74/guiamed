@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
-import { requirePageUser } from "@/lib/auth/page";
+import { requirePageAdmin } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { listCodes } from "@/lib/db/repos";
 import { importCodesAction } from "@/app/actions";
 
 export default async function TabelasPage() {
-  const user = await requirePageUser();
+  const user = await requirePageAdmin();
   const codes = await withRls(user.organizationId, user.id, (db) => listCodes(db, user.organizationId));
   return (
     <AppShell user={user} title="Tabelas TUSS / IPASGO">

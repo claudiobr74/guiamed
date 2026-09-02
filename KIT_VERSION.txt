@@ -1,0 +1,4 @@
+GUIAMED_CURSOR_KIT
+Version: 1.0.0
+Stack: Figma + Firebase + Vercel + GitHub
+Generated: 2026-09-02

@@ -1,0 +1,12 @@
+---
+description: Deploy Vercel (Preview e Production) do GuiaMed.
+globs: "{vercel.json,.env.example,README.md}"
+alwaysApply: false
+---
+
+# Vercel
+
+- Deploy web na Vercel (Preview por PR, Production na branch principal).
+- Variáveis de produção: `SESSION_SECRET`, `NEXT_PUBLIC_FIREBASE_*`, credencial Admin (`FIREBASE_SERVICE_ACCOUNT` ou `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`).
+- Não reutilizar projetos Vercel/Firebase de outros produtos.
+- Conferir preview URL após deploy de UI. Runtime Node.js (não Edge) para `firebase-admin`.

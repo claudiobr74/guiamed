@@ -1,7 +1,7 @@
 import { firebaseAuth } from "@/lib/firebase/admin";
 import { firebaseWebApiKey } from "@/lib/firebase/config";
 import { getDb } from "@/lib/db/client";
-import type { SessionUser, UserRole } from "@/types/domain";
+import type { Profile, SessionUser, UserRole } from "@/types/domain";
 
 interface AuthProfile {
   organizationId: string;
@@ -86,9 +86,20 @@ export async function loginWithPassword(email: string, password: string): Promis
   };
 }
 
-export async function getProfile(userId: string) {
+export async function getProfile(userId: string): Promise<Profile | null> {
   const db = await getDb();
   const snap = await db.collection("users").doc(userId).get();
   if (!snap.exists) return null;
-  return { id: snap.id, ...snap.data() };
+  const data = snap.data();
+  if (!data) return null;
+  const role = data.role as UserRole;
+  if (role !== "admin" && role !== "doctor") return null;
+  return {
+    id: snap.id,
+    organizationId: String(data.organizationId ?? ""),
+    role,
+    fullName: String(data.fullName ?? ""),
+    email: String(data.email ?? ""),
+    active: data.active !== false,
+  };
 }

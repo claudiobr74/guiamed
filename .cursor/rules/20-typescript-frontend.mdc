@@ -1,0 +1,14 @@
+---
+description: Padrões TypeScript e frontend Next.js do GuiaMed.
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript / frontend
+
+- App Router em `src/app`. Server Components por padrão; `"use client"` só quando necessário.
+- Tipos de domínio em `src/types/domain.ts`. Não duplicar modelos.
+- Server Actions em `src/app/actions.ts` para mutações. Validar no servidor.
+- Não usar `any`. Erros de domínio em português.
+- Quantidade de procedimento: `number` inteiro > 0, padrão 1 (`parseQuantity`).
+- Estilo via tokens CSS em `src/app/globals.css` e classes Tailwind existentes.
