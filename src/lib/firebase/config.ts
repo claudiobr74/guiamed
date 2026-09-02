@@ -6,12 +6,9 @@ export const FIREBASE_AUTH_DOMAIN =
 export const FIREBASE_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? `${FIREBASE_PROJECT_ID}.appspot.com`;
 
+/** apiKey Web pública do app no projeto guiamed-918ee (não é a conta de serviço). */
+const FIREBASE_WEB_API_KEY_DEFAULT = "AIzaSyAKihHLhd2aL9sapkJZHty1zgPpZQRdW7k";
+
 export function firebaseWebApiKey(): string {
-  const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!key) {
-    throw new Error(
-      "Configure NEXT_PUBLIC_FIREBASE_API_KEY com a chave Web do projeto Firebase guiamed-918ee (Console > Configurações do projeto).",
-    );
-  }
-  return key;
+  return process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || FIREBASE_WEB_API_KEY_DEFAULT;
 }
