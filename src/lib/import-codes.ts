@@ -234,10 +234,13 @@ export function parseSheetMatrix(matrix: string[][]): ImportRow[] {
 export function parseCsv(text: string): ImportRow[] {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length === 0) return [];
-  return parseSheetMatrix(lines.map((line) => splitCsvLine(line)));
+  const commaColumns = splitCsvLine(lines[0], ",").length;
+  const semicolonColumns = splitCsvLine(lines[0], ";").length;
+  const delimiter = semicolonColumns > commaColumns ? ";" : ",";
+  return parseSheetMatrix(lines.map((line) => splitCsvLine(line, delimiter)));
 }
 
-function splitCsvLine(line: string): string[] {
+function splitCsvLine(line: string, delimiter: "," | ";"): string[] {
   const out: string[] = [];
   let cur = "";
   let inQuotes = false;
@@ -250,7 +253,7 @@ function splitCsvLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (ch === "," && !inQuotes) {
+    } else if (ch === delimiter && !inQuotes) {
       out.push(cur);
       cur = "";
     } else {

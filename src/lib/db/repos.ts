@@ -272,36 +272,49 @@ export async function insertCodesIdempotent(
     createdBy: userId,
     createdAt: now(),
     rowCount: payload.rows.length,
+    processedRows: 0,
+    status: "processing",
   });
   let inserted = 0;
   let updated = 0;
-  for (const row of payload.rows) {
-    const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
-    const ref = orgCollection(db, orgId, "procedureCodes").doc(docId);
-    const existing = await ref.get();
-    const existingData = existing.data();
-    await ref.set({
-      // Importação nunca confirma vínculos automaticamente e nunca apaga um vínculo existente.
-      procedureId: (existingData?.procedureId as string | null | undefined) ?? null,
-      codeSystem: row.codeSystem,
-      code: row.code,
-      description: row.description,
-      validFrom: row.validFrom,
-      validUntil: row.validUntil,
-      version: row.version,
-      active: row.active,
-      healthInsurerId: (existingData?.healthInsurerId as string | null | undefined) ?? null,
-      defaultQuantity: parseQuantity(existingData?.defaultQuantity),
-      metadata: {
-        ...((existingData?.metadata as ProcedureCode["metadata"] | undefined) ?? {}),
-        importedProcedureName: row.procedureName,
-      },
-      importBatchId: batchRef.id,
-      updatedAt: now(),
-    }, { merge: true });
-    if (existing.exists) updated += 1;
-    else inserted += 1;
+  const chunkSize = 400;
+  for (let offset = 0; offset < payload.rows.length; offset += chunkSize) {
+    const rows = payload.rows.slice(offset, offset + chunkSize);
+    const refs = rows.map((row) => {
+      const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
+      return orgCollection(db, orgId, "procedureCodes").doc(docId);
+    });
+    const existingSnapshots = await db.getAll(...refs);
+    const batch = db.batch();
+    rows.forEach((row, index) => {
+      const existing = existingSnapshots[index];
+      const existingData = existing.data();
+      batch.set(refs[index], {
+        // Importação nunca confirma vínculos automaticamente e nunca apaga um vínculo existente.
+        procedureId: (existingData?.procedureId as string | null | undefined) ?? null,
+        codeSystem: row.codeSystem,
+        code: row.code,
+        description: row.description,
+        validFrom: row.validFrom,
+        validUntil: row.validUntil,
+        version: row.version,
+        active: row.active,
+        healthInsurerId: (existingData?.healthInsurerId as string | null | undefined) ?? null,
+        defaultQuantity: parseQuantity(existingData?.defaultQuantity),
+        metadata: {
+          ...((existingData?.metadata as ProcedureCode["metadata"] | undefined) ?? {}),
+          importedProcedureName: row.procedureName,
+        },
+        importBatchId: batchRef.id,
+        updatedAt: now(),
+      }, { merge: true });
+      if (existing.exists) updated += 1;
+      else inserted += 1;
+    });
+    await batch.commit();
+    await batchRef.set({ processedRows: Math.min(offset + rows.length, payload.rows.length) }, { merge: true });
   }
+  await batchRef.set({ status: "completed", completedAt: now(), inserted, updated }, { merge: true });
   return { inserted, updated, batchId: batchRef.id };
 }
 

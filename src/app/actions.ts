@@ -144,7 +144,7 @@ async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format:
     const parsed = JSON.parse(await file.text()) as ImportRow[];
     return { rows: parsed, format: "json" };
   }
-  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+  if (name.endsWith(".xlsx")) {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await file.arrayBuffer());
     if (wb.worksheets.length === 0) throw new Error("Planilha vazia.");
@@ -163,7 +163,14 @@ async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format:
     }
     return { rows: best, format: "xlsx" };
   }
-  return { rows: parseCsv(await file.text()), format: "csv" };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder("windows-1252").decode(bytes);
+  }
+  return { rows: parseCsv(text), format: "csv" };
 }
 
 export async function previewImportCodesAction(formData: FormData) {

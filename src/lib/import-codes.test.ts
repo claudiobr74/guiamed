@@ -23,6 +23,11 @@ describe("importação", () => {
     expect(rows[0]?.code).toBe("1");
   });
 
+  it("csv separado por ponto e vírgula preserva zeros à esquerda", () => {
+    const rows = parseCsv("code;description;version\n00123456;Procedimento sintético;2026.1");
+    expect(rows[0]).toMatchObject({ code: "00123456", description: "Procedimento sintético", version: "2026.1" });
+  });
+
   it("lê tabela Unimed/Aurum com título, vigência e DESCRIÇÃO", () => {
     const rows = parseSheetMatrix([
       ["Tabela Referência para Reembolso"],

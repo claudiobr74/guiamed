@@ -68,7 +68,7 @@ export function ImportCodesPanel() {
           <Input name="version" required placeholder="2026.1" />
         </Field>
         <Field label="Arquivo">
-          <Input name="file" type="file" accept=".csv,.xlsx,.xls,.json" required />
+          <Input name="file" type="file" accept=".csv,.xlsx,.json" required />
         </Field>
         <p className="text-[12px] text-[#475569]">
           Aceita o layout oficial (code, description…) ou tabelas Unimed/TUSS com coluna DESCRIÇÃO e

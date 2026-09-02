@@ -6,7 +6,7 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último teste: `vitest run` — 69/69 PASS.
+- Último teste: `vitest run` — 70/70 PASS.
 - Gates locais: lint PASS; typecheck PASS. O primeiro commit passou também no CI e build remotos; o próximo commit deve ser novamente validado pelo CI.
 
 ## Concluído neste checkpoint
@@ -33,10 +33,14 @@ Atualizado em: 2026-09-02
 - criação de versão de template valida ownership e só desativa versões do mesmo tenant;
 - falha após upload de template remove o arquivo órfão;
 - rota genérica não expõe assinaturas e exige referência real ao documento/template.
+- importação usa leituras e writes em chunks de 400, com status/progresso no batch;
+- CSV aceita vírgula ou ponto e vírgula e fallback Windows-1252;
+- suporte anunciado a `.xls` foi removido porque o parser real é XLSX;
+- teste garante preservação de zeros à esquerda no CSV com ponto e vírgula.
 
 ## Próxima tarefa exata
 
-Substituir a importação sequencial por batches/chunks, ampliar o preview para conflitos/duplicados/inválidos e implementar o gerenciador administrativo de vínculos com quantidade padrão.
+Implementar o gerenciador administrativo de vínculos com quantidade padrão e ampliar o preview da importação para conflitos/duplicados/inválidos em categorias separadas.
 
 Arquivos principais:
 
@@ -52,7 +56,7 @@ Arquivos principais:
 ### P0
 
 - gerenciador administrativo de vínculos;
-- importação em lote com preview completo e preservação de vínculos;
+- preview de importação completo com conflitos/duplicados/inválidos separados;
 - editor administrativo de kits com escolha explícita de códigos e quantidade por item;
 - testes de integração/E2E e Preview autenticado.
 
