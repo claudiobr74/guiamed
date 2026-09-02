@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CODE_NOT_FOUND, DEFAULT_PROCEDURE_QUANTITY, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
+import { CODE_NOT_FOUND, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
 import { Badge, Button, Card, Field, Input, QuantityStepper, Select, Textarea } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { KitPickerModal } from "@/features/requests/KitPickerModal";
@@ -19,6 +19,7 @@ import {
 } from "@/app/actions";
 import { parseQuantity } from "@/lib/quantity";
 import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
+import { resolveTemplateSelection } from "@/lib/templates/compatibility";
 
 const STEPS = ["Paciente", "Diagnóstico", "Procedimentos", "Justificativa", "Revisão"] as const;
 
@@ -30,6 +31,7 @@ export function RequestEditor({
   insurers,
   templates,
   kits,
+  kitProcedures,
 }: {
   initial: SurgicalRequest;
   patients: Patient[];
@@ -38,12 +40,14 @@ export function RequestEditor({
   insurers: HealthInsurer[];
   templates: DocumentTemplate[];
   kits: ProcedureKit[];
+  kitProcedures: Procedure[];
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [request, setRequest] = useState(initial);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [patientQuery, setPatientQuery] = useState("");
   const [patientResults, setPatientResults] = useState<Patient[]>(patients);
   const [procQuery, setProcQuery] = useState("");
@@ -64,6 +68,14 @@ export function RequestEditor({
   const selectedDoctor = doctors.find((d) => d.id === request.doctorId) ?? request.doctor;
   const selectedInstitution = institutions.find((i) => i.id === request.institutionId) ?? request.institution;
   const selectedTemplate = templates.find((t) => t.id === request.templateId);
+  const compatibleTemplates = useMemo(
+    () => resolveTemplateSelection({ templates, institutionId: request.institutionId, healthInsurerId: request.healthInsurerId, selectedTemplateId: request.templateId }).templates,
+    [templates, request.institutionId, request.healthInsurerId, request.templateId],
+  );
+  const kitProcedureById = useMemo(
+    () => new Map(kitProcedures.map((procedure) => [procedure.id, procedure])),
+    [kitProcedures],
+  );
 
   useEffect(() => {
     if (request.status !== "draft") return;
@@ -93,6 +105,47 @@ export function RequestEditor({
 
   function patch(partial: Partial<SurgicalRequest>) {
     setRequest((prev) => ({ ...prev, ...partial }));
+  }
+
+  function applyTemplateContext(institutionId: string | null, healthInsurerId: string | null) {
+    const resolved = resolveTemplateSelection({
+      templates,
+      institutionId,
+      healthInsurerId,
+      selectedTemplateId: request.templateId,
+    });
+    setTemplateNotice(
+      resolved.invalidated
+        ? "O template anterior não é compatível com a instituição ou o convênio selecionado e foi removido."
+        : null,
+    );
+    patch({
+      institutionId,
+      healthInsurerId,
+      templateId: resolved.templateId,
+      templateVersionId: resolved.templateVersionId,
+    });
+  }
+
+  function applyPatient(patient: Patient) {
+    const resolved = resolveTemplateSelection({
+      templates,
+      institutionId: request.institutionId,
+      healthInsurerId: patient.healthInsurerId,
+      selectedTemplateId: request.templateId,
+    });
+    setTemplateNotice(
+      resolved.invalidated
+        ? "O template anterior não é compatível com o convênio do paciente e foi removido."
+        : null,
+    );
+    patch({
+      patientId: patient.id,
+      patient,
+      healthInsurerId: patient.healthInsurerId,
+      templateId: resolved.templateId,
+      templateVersionId: resolved.templateVersionId,
+    });
   }
 
   async function onGenerate() {
@@ -166,6 +219,7 @@ export function RequestEditor({
         </div>
       </div>
       {saveError ? <p className="rounded-lg bg-[#fee2e2] px-3 py-2 text-[13px] text-[#dc2626]">{saveError}</p> : null}
+      {templateNotice ? <p role="status" className="rounded-lg bg-[#fff7ed] px-3 py-2 text-[13px] text-[#b45309]">{templateNotice}</p> : null}
 
       {step === 0 ? (
         <div className="flex flex-col gap-5">
@@ -198,7 +252,7 @@ export function RequestEditor({
                       <button
                         type="button"
                         className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] hover:bg-[#eff6ff]"
-                        onClick={() => patch({ patientId: p.id, patient: p, healthInsurerId: p.healthInsurerId })}
+                        onClick={() => applyPatient(p)}
                       >
                         <span className="font-semibold">{p.fullName}</span>
                         <span className="text-[#94a3b8]">{p.cpf ?? "sem CPF"}</span>
@@ -221,14 +275,14 @@ export function RequestEditor({
                 </div>
               </div>
             )}
-            {showNewPatient ? <NewPatientForm onCreated={(p) => { patch({ patientId: p.id, patient: p }); setShowNewPatient(false); }} insurers={insurers} /> : null}
+            {showNewPatient ? <NewPatientForm onCreated={(p) => { applyPatient(p); setShowNewPatient(false); }} insurers={insurers} /> : null}
           </Card>
           <Card>
             <h2 className="mb-4 text-[14px] font-bold">Instituição / formulário</h2>
             <Field label="Instituição selecionada">
               <Select
                 value={request.institutionId ?? ""}
-                onChange={(e) => patch({ institutionId: e.target.value || null })}
+                onChange={(e) => applyTemplateContext(e.target.value || null, request.healthInsurerId)}
               >
                 <option value="">Selecione</option>
                 {institutions.map((i) => (
@@ -248,7 +302,7 @@ export function RequestEditor({
                 }}
               >
                 <option value="">Selecione o formulário original</option>
-                {templates.map((t) => (
+                {compatibleTemplates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                     {t.currentVersion ? ` — v${t.currentVersion.version}` : " (sem PDF)"}
@@ -530,20 +584,37 @@ export function RequestEditor({
       kits={kits}
       onClose={() => setShowKit(false)}
       onSelect={(kit) => {
-        const items = kit.items.map((item, index) => ({
-          id: crypto.randomUUID(),
-          requestId: request.id,
-          procedureId: item.procedureId,
-          procedureName: item.procedureName,
-          tussCodeId: null,
-          ipasgoCodeId: null,
-          tussCodeSnapshot: null,
-          ipasgoCodeSnapshot: null,
-          quantity: item.defaultQuantity || DEFAULT_PROCEDURE_QUANTITY,
-          laterality: null,
-          notes: item.notes,
-          sortOrder: request.items.length + index,
-        }));
+        const missingProcedure = kit.items.find((item) => !kitProcedureById.has(item.procedureId));
+        if (missingProcedure) {
+          setSaveState("error");
+          setSaveError(`O procedimento ${missingProcedure.procedureName} deste kit não está mais disponível.`);
+          return;
+        }
+        const resolutionDate = new Date();
+        const items = kit.items.map((item, index) => {
+          const procedure = kitProcedureById.get(item.procedureId);
+          if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
+          const tuss = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+          const ipasgo = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+          return {
+            id: crypto.randomUUID(),
+            requestId: request.id,
+            procedureId: procedure.id,
+            procedureName: procedure.name,
+            tussCodeId: tuss?.id ?? null,
+            ipasgoCodeId: ipasgo?.id ?? null,
+            tussCodeSnapshot: tuss?.code ?? null,
+            ipasgoCodeSnapshot: ipasgo?.code ?? null,
+            tussDescriptionSnapshot: tuss?.description ?? null,
+            ipasgoDescriptionSnapshot: ipasgo?.description ?? null,
+            tussVersionSnapshot: tuss?.version ?? null,
+            ipasgoVersionSnapshot: ipasgo?.version ?? null,
+            quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss, ipasgo)),
+            laterality: null,
+            notes: item.notes,
+            sortOrder: request.items.length + index,
+          };
+        });
         patch({ items: [...request.items, ...items] });
         setShowKit(false);
       }}

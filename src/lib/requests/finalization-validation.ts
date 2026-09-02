@@ -27,6 +27,7 @@ export function validateRequestForFinalization(input: {
   if (!request.institutionId || !request.institution) error("INSTITUTION_REQUIRED", "Selecione a instituição.");
   if (!request.templateId || !request.templateVersionId || !template || !version) error("TEMPLATE_REQUIRED", "Selecione um template oficial válido.");
 
+  if (template && !template.active) error("TEMPLATE_INACTIVE", "O template selecionado está inativo.");
   if (template && request.templateId !== template.id) error("TEMPLATE_INCOMPATIBLE", "O template selecionado não corresponde à guia.");
   if (version && request.templateVersionId !== version.id) error("TEMPLATE_VERSION_INCOMPATIBLE", "A versão do template não corresponde à guia.");
   if (template && version && version.templateId !== template.id) error("TEMPLATE_VERSION_INCOMPATIBLE", "A versão selecionada não pertence ao template.");

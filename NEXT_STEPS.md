@@ -6,8 +6,8 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último teste: `vitest run` — 57/57 PASS.
-- Gates locais: lint PASS; typecheck PASS; build bloqueado por instalação local incompleta de dependências (o lockfile contém `rolldown@1.2.7`, ainda dentro da política de idade mínima do ambiente). O CI remoto da base estava verde.
+- Último teste: `vitest run` — 65/65 PASS.
+- Gates locais: lint PASS; typecheck PASS. O primeiro commit passou também no CI e build remotos; o próximo commit deve ser novamente validado pelo CI.
 
 ## Concluído neste checkpoint
 
@@ -18,10 +18,16 @@ Atualizado em: 2026-09-02
 - validação central server-side de pré-finalização;
 - nome enganoso `withRls` substituído por `withOrganizationContext` com identidade obrigatória;
 - testes unitários de resolução, quantidade e validação de finalização.
+- materialização server-side de itens e rejeição de códigos adulterados/incompatíveis;
+- kits agora resolvem TUSS/IPASGO na UI e são revalidados no servidor;
+- teste obrigatório de kit com quantidades 1, 2 e 4;
+- reimportação preserva vínculo, operadora e quantidade existentes e não confirma vínculo automaticamente;
+- template filtrado/invalidationado por instituição e convênio, com seleção automática quando único;
+- novo paciente propaga o convênio para a guia.
 
 ## Próxima tarefa exata
 
-Implementar materialização server-side única de itens para seleção manual e kits, revalidando `procedureId`, códigos, vigência, operadora e quantidade antes de salvar. Depois corrigir o editor de kits para persistir TUSS e IPASGO separadamente e adicionar o teste obrigatório com quantidades 1, 2 e 4.
+Implementar concorrência otimista do autosave com revisão monotônica e retornar o rascunho materializado ao cliente. Depois persistir confirmação médica e snapshot histórico consolidado na transação de finalização.
 
 Arquivos principais:
 
@@ -36,11 +42,9 @@ Arquivos principais:
 
 ### P0
 
-- materialização e validação server-side de itens/códigos;
 - gerenciador administrativo de vínculos;
 - importação em lote com preview completo e preservação de vínculos;
-- kits com códigos e quantidades corretas;
-- filtro/invalidação automática de template na UI;
+- editor administrativo de kits com escolha explícita de códigos e quantidade por item;
 - confirmação médica persistida;
 - snapshot histórico consolidado;
 - correção cross-tenant em `createTemplateVersion` e autorização por recurso no download;

@@ -20,6 +20,7 @@ import type {
   TemplateVersion,
 } from "@/types/domain";
 import { parseQuantity } from "@/lib/quantity";
+import { materializeRequestItems } from "@/lib/requests/materialize-items";
 
 function now() {
   return new Date().toISOString();
@@ -270,19 +271,16 @@ export async function insertCodesIdempotent(
     createdAt: now(),
     rowCount: payload.rows.length,
   });
-  const procedures = await listProcedures(db, orgId);
   let inserted = 0;
   let updated = 0;
   for (const row of payload.rows) {
-    let procedureId: string | null = null;
-    if (row.procedureName) {
-      procedureId = procedures.find((p) => p.name.toLowerCase() === row.procedureName?.toLowerCase())?.id ?? null;
-    }
     const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
     const ref = orgCollection(db, orgId, "procedureCodes").doc(docId);
     const existing = await ref.get();
+    const existingData = existing.data();
     await ref.set({
-      procedureId,
+      // Importação nunca confirma vínculos automaticamente e nunca apaga um vínculo existente.
+      procedureId: (existingData?.procedureId as string | null | undefined) ?? null,
       codeSystem: row.codeSystem,
       code: row.code,
       description: row.description,
@@ -290,7 +288,12 @@ export async function insertCodesIdempotent(
       validUntil: row.validUntil,
       version: row.version,
       active: row.active,
-      metadata: {},
+      healthInsurerId: (existingData?.healthInsurerId as string | null | undefined) ?? null,
+      defaultQuantity: parseQuantity(existingData?.defaultQuantity),
+      metadata: {
+        ...((existingData?.metadata as ProcedureCode["metadata"] | undefined) ?? {}),
+        importedProcedureName: row.procedureName,
+      },
       importBatchId: batchRef.id,
       updatedAt: now(),
     }, { merge: true });
@@ -580,6 +583,15 @@ export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequ
   if (snap.data()?.status !== "draft") {
     throw new Error("Documento finalizado não pode ser alterado. Duplique para criar uma nova versão.");
   }
+  const procedures = await listProcedures(db, user.organizationId);
+  const codes = procedures.flatMap((procedure) => procedure.codes);
+  const items = materializeRequestItems({
+    requestId: request.id,
+    items: request.items,
+    procedures,
+    codes,
+    healthInsurerId: request.healthInsurerId,
+  });
   await orgCollection(db, user.organizationId, "requests").doc(request.id).set({
     patientId: request.patientId,
     doctorId: request.doctorId,
@@ -590,7 +602,7 @@ export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequ
     diagnosis: request.diagnosis,
     clinicalJustification: request.clinicalJustification,
     clinicalNotes: request.clinicalNotes,
-    items: request.items,
+    items,
     cids: request.cids,
     updatedAt: now(),
   }, { merge: true });
