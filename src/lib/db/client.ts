@@ -1,20 +1,10 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { firebaseDb, hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
-import { seedCidCodes } from "@/lib/db/seed";
+import { firebaseDb } from "@/lib/firebase/admin";
 
 export type Db = Firestore;
 
-let seeded = false;
-
 export async function getDb(): Promise<Db> {
-  const db = firebaseDb();
-  if (!seeded) {
-    seeded = true;
-    if (hasFirebaseAdminCredentials()) {
-      await seedCidCodes(db);
-    }
-  }
-  return db;
+  return firebaseDb();
 }
 
 /** Acesso por organização é aplicado nas consultas (não é RLS do Postgres). */

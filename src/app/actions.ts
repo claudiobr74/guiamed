@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
+import { normalizeRequestCids, searchCid10 } from "@/lib/cid10/catalog";
 import { withRls } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { parseQuantity } from "@/lib/quantity";
@@ -94,9 +95,9 @@ export async function searchProceduresAction(q: string) {
 }
 
 export async function searchCidsAction(q: string) {
-  const user = await requireUser();
+  await requireUser();
   if (!q.trim()) return [];
-  return withRls(user.organizationId, user.id, (db) => repos.searchCids(db, q));
+  return searchCid10(q);
 }
 
 export async function searchPatientsAction(q: string) {
@@ -115,7 +116,11 @@ export async function createRequestAction() {
 export async function saveRequestAction(request: SurgicalRequest) {
   const user = await requireUser();
   for (const item of request.items) parseQuantity(item.quantity);
-  await withRls(user.organizationId, user.id, (db) => repos.saveDraft(db, user, request));
+  const normalizedRequest = {
+    ...request,
+    cids: normalizeRequestCids(request.cids, request.id),
+  };
+  await withRls(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
   return { ok: true as const };
 }
 

@@ -1,4 +1,5 @@
 import type { Db } from "@/lib/db/client";
+import { normalizeRequestCids } from "@/lib/cid10/catalog";
 import * as repos from "@/lib/db/repos";
 import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
 import { getObject } from "@/lib/storage";
@@ -20,6 +21,7 @@ export async function renderRequestPdf(
   requestId: string,
 ): Promise<RenderedRequestPdf> {
   const request = await repos.hydrateRequest(db, user.organizationId, requestId);
+  request.cids = normalizeRequestCids(request.cids, request.id);
   if (!request.templateVersionId) {
     throw new Error("Selecione um template antes de gerar o PDF.");
   }

@@ -111,6 +111,11 @@ export interface CidCode {
   description: string;
   version: string;
   active: boolean;
+  classification: "+" | "*" | null;
+  sexRestriction: "F" | "M" | null;
+  unlikelyCauseOfDeath: boolean;
+  reference: string | null;
+  excluded: string | null;
 }
 
 export interface ProcedureKit {

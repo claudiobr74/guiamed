@@ -2,7 +2,6 @@ import type { DocumentData } from "firebase-admin/firestore";
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
 import type {
-  CidCode,
   Doctor,
   DocumentTemplate,
   FieldMapping,
@@ -189,16 +188,6 @@ export async function upsertInsurer(
   }, { merge: true });
   const saved = await orgCollection(db, orgId, "healthInsurers").doc(id).get();
   return mapInsurer(orgId, id, saved.data() ?? {});
-}
-
-export async function searchCids(db: Db, q: string): Promise<CidCode[]> {
-  const snap = await db.collection("cidCodes").get();
-  const needle = q.trim().toLowerCase();
-  return snap.docs
-    .map((doc) => doc.data() as CidCode)
-    .filter((c) => c.active && c.code && c.description && (c.code.toLowerCase().includes(needle) || c.description.toLowerCase().includes(needle)))
-    .sort((a, b) => a.code.localeCompare(b.code))
-    .slice(0, 20);
 }
 
 export async function listProcedures(db: Db, orgId: string): Promise<Procedure[]> {
