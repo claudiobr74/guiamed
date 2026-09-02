@@ -28,9 +28,15 @@ describe("session", () => {
     expect(decodeSession(`${token}x`)).toBeNull();
   });
 
-  it("exige SESSION_SECRET em produção", () => {
+  it("exige SESSION_SECRET em produção para assinar", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("SESSION_SECRET", "");
     expect(() => encodeSession(user)).toThrow(/SESSION_SECRET/);
+  });
+
+  it("não derruba a página se o cookie existir sem SESSION_SECRET", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SESSION_SECRET", "");
+    expect(decodeSession("payload.assinatura")).toBeNull();
   });
 });

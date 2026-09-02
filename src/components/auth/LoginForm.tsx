@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { loginAction } from "@/app/actions";
+import { loginAction } from "@/app/auth-actions";
 import { Logo } from "@/components/Logo";
 import { Button, Field, Input } from "@/components/ui";
 import { Icon } from "@/components/icons";
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
+  const [state, action, pending] = useActionState(loginAction, null);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9]">
-      <form action={loginAction} className="flex flex-col items-center gap-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9] px-4">
+      <form action={action} className="flex w-full max-w-[380px] flex-col items-center gap-6">
         <Logo size="lg" />
-        <div className="w-[380px] rounded-xl border border-[#e2e8f0] bg-white p-8">
+        <div className="w-full rounded-xl border border-[#e2e8f0] bg-white p-8">
           <h1 className="text-[18px] font-bold text-[#0f172a]">Acessar plataforma</h1>
           <p className="mt-1 text-[13px] text-[#475569]">Preencha seus dados para continuar</p>
           <div className="mt-5 flex flex-col gap-4">
@@ -47,8 +48,9 @@ export function LoginForm() {
               </div>
             </div>
           </div>
-          <Button type="submit" className="mt-5 w-full text-[14px]">
-            Entrar
+          {state?.error ? <p className="mt-4 text-[12px] text-[#dc2626]">{state.error}</p> : null}
+          <Button type="submit" className="mt-5 w-full text-[14px]" disabled={pending}>
+            {pending ? "Entrando…" : "Entrar"}
           </Button>
           <p className="mt-4 text-center text-[12px] text-[#475569]">
             Primeiro acesso?{" "}

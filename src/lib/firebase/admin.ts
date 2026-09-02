@@ -15,7 +15,13 @@ export function hasFirebaseAdminCredentials(): boolean {
 function serviceAccount(): ServiceAccount | null {
   const json = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (json) {
-    return JSON.parse(json) as ServiceAccount;
+    try {
+      return JSON.parse(json) as ServiceAccount;
+    } catch {
+      throw new Error(
+        "FIREBASE_SERVICE_ACCOUNT não é um JSON válido. Cole o arquivo inteiro da conta de serviço em uma linha.",
+      );
+    }
   }
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/types/domain";
-import { logoutAction } from "@/app/actions";
+import { logoutAction } from "@/app/auth-actions";
 import { Icon, type IconName } from "@/components/icons";
 import { Logo } from "@/components/Logo";
 import { cn } from "@/components/ui";

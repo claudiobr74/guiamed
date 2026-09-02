@@ -1,40 +1,9 @@
-import { registerAction } from "@/app/actions";
-import { Logo } from "@/components/Logo";
-import { Button, Field, Input } from "@/components/ui";
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { RegisterForm } from "@/components/auth/RegisterForm";
+import { getCurrentUser } from "@/lib/auth/current";
 
-export default function RegisterPage() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9]">
-      <Logo size="lg" />
-      <form action={registerAction} className="w-[380px] rounded-xl border border-[#e2e8f0] bg-white p-8">
-        <h1 className="text-[18px] font-bold text-[#0f172a]">Criar organização</h1>
-        <p className="mt-1 text-[13px] text-[#475569]">Cadastre a clínica e o primeiro administrador</p>
-        <div className="mt-5 flex flex-col gap-4">
-          <Field label="Organização">
-            <Input name="organizationName" required placeholder="Clínica exemplo" />
-          </Field>
-          <Field label="Seu nome">
-            <Input name="fullName" required />
-          </Field>
-          <Field label="E-mail">
-            <Input name="email" type="email" required />
-          </Field>
-          <Field label="Senha">
-            <Input name="password" type="password" minLength={8} required />
-          </Field>
-        </div>
-        <Button type="submit" className="mt-5 w-full">
-          Criar acesso
-        </Button>
-        <p className="mt-4 text-center text-[12px] text-[#475569]">
-          Já tem conta?{" "}
-          <Link href="/login" className="font-semibold text-[#1e5fa6]">
-            Entrar
-          </Link>
-        </p>
-      </form>
-      <p className="text-[11px] text-[#94a3b8]">GuiaMed SaaS • v1.4.2 • Segurança Certificada</p>
-    </div>
-  );
+export default async function RegisterPage() {
+  const user = await getCurrentUser();
+  if (user) redirect("/");
+  return <RegisterForm />;
 }

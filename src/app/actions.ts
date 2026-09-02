@@ -1,9 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth/session";
-import { loginWithPassword, registerOrganization, requestPasswordReset } from "@/lib/db/auth";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { withRls } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
@@ -25,48 +22,6 @@ import type {
   SurgicalRequest,
 } from "@/types/domain";
 import ExcelJS from "exceljs";
-
-async function setSessionCookie(token: string) {
-  const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 14,
-  });
-}
-
-export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const user = await loginWithPassword(email, password);
-  await setSessionCookie(encodeSession(user));
-  redirect("/");
-}
-
-export async function registerAction(formData: FormData) {
-  const user = await registerOrganization({
-    organizationName: String(formData.get("organizationName") ?? "Clínica"),
-    fullName: String(formData.get("fullName") ?? ""),
-    email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
-  });
-  await setSessionCookie(encodeSession(user));
-  redirect("/");
-}
-
-export async function logoutAction() {
-  const store = await cookies();
-  store.delete(SESSION_COOKIE);
-  redirect("/login");
-}
-
-export async function requestPasswordResetAction(email: string) {
-  if (!email.trim()) throw new Error("Informe o e-mail.");
-  await requestPasswordReset(email);
-  return { ok: true as const };
-}
 
 export async function savePatientAction(data: Partial<Patient> & { fullName: string; id?: string }) {
   const user = await requireUser();

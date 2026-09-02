@@ -13,6 +13,14 @@ function secret(): string {
   return value || "guiamed-dev-session-secret-change-me";
 }
 
+function decodeSecret(): string | null {
+  const value = process.env.SESSION_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    return value || null;
+  }
+  return value || "guiamed-dev-session-secret-change-me";
+}
+
 export function encodeSession(user: SessionUser): string {
   const payload = Buffer.from(JSON.stringify(user), "utf8").toString("base64url");
   const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
@@ -21,13 +29,15 @@ export function encodeSession(user: SessionUser): string {
 
 export function decodeSession(token: string | undefined): SessionUser | null {
   if (!token) return null;
-  const [payload, sig] = token.split(".");
-  if (!payload || !sig) return null;
-  const expected = createHmac("sha256", secret()).update(payload).digest("base64url");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const key = decodeSecret();
+  if (!key) return null;
   try {
+    const [payload, sig] = token.split(".");
+    if (!payload || !sig) return null;
+    const expected = createHmac("sha256", key).update(payload).digest("base64url");
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
     const user = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionUser;
     if (!user.id || !user.organizationId || !user.role) return null;
     return user;

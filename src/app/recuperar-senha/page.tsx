@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { requestPasswordResetAction } from "@/app/actions";
+import { requestPasswordResetAction } from "@/app/auth-actions";
 import { Logo } from "@/components/Logo";
 import { Button, Field, Input } from "@/components/ui";
 
@@ -11,10 +11,10 @@ export default function RecuperarSenhaPage() {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9]">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9] px-4">
       <Logo size="lg" href="/login" />
       <form
-        className="w-[380px] rounded-xl border border-[#e2e8f0] bg-white p-8"
+        className="w-full max-w-[380px] rounded-xl border border-[#e2e8f0] bg-white p-8"
         onSubmit={async (event) => {
           event.preventDefault();
           setError(null);

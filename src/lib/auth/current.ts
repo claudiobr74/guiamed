@@ -11,16 +11,21 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!hasFirebaseAdminCredentials()) {
     return process.env.NODE_ENV === "production" ? null : session;
   }
-  const profile = await getProfile(session.id);
-  if (!profile || !profile.active) return null;
-  if (profile.organizationId !== session.organizationId) return null;
-  return {
-    id: session.id,
-    organizationId: profile.organizationId,
-    role: profile.role,
-    fullName: profile.fullName,
-    email: profile.email,
-  };
+  try {
+    const profile = await getProfile(session.id);
+    if (!profile || !profile.active) return null;
+    if (profile.organizationId !== session.organizationId) return null;
+    return {
+      id: session.id,
+      organizationId: profile.organizationId,
+      role: profile.role,
+      fullName: profile.fullName,
+      email: profile.email,
+    };
+  } catch (err) {
+    console.error("Falha ao revalidar o perfil da sessão", err);
+    return null;
+  }
 }
 
 export async function requireUser(): Promise<SessionUser> {
