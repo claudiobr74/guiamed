@@ -6,7 +6,7 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último teste: `vitest run` — 68/68 PASS.
+- Último teste: `vitest run` — 69/69 PASS.
 - Gates locais: lint PASS; typecheck PASS. O primeiro commit passou também no CI e build remotos; o próximo commit deve ser novamente validado pelo CI.
 
 ## Concluído neste checkpoint
@@ -27,10 +27,16 @@ Atualizado em: 2026-09-02
 - autosave serializado com revisão monotônica e reenvio de alterações feitas durante uma gravação;
 - gravações atrasadas agora falham com `REQUEST_CHANGED` em vez de sobrescrever estado novo;
 - resposta do autosave devolve itens materializados pelo servidor.
+- confirmação médica validada no servidor e registrada com usuário, timestamp e revisão;
+- snapshot histórico consolidado de paciente, médico, instituição, convênio, template, códigos, quantidades e CID;
+- finalização compara também a revisão monotônica, além de `updatedAt`;
+- criação de versão de template valida ownership e só desativa versões do mesmo tenant;
+- falha após upload de template remove o arquivo órfão;
+- rota genérica não expõe assinaturas e exige referência real ao documento/template.
 
 ## Próxima tarefa exata
 
-Persistir confirmação médica e snapshot histórico consolidado na transação de finalização. Em seguida corrigir o isolamento cross-tenant de `createTemplateVersion` e restringir download por recurso.
+Substituir a importação sequencial por batches/chunks, ampliar o preview para conflitos/duplicados/inválidos e implementar o gerenciador administrativo de vínculos com quantidade padrão.
 
 Arquivos principais:
 
@@ -48,9 +54,6 @@ Arquivos principais:
 - gerenciador administrativo de vínculos;
 - importação em lote com preview completo e preservação de vínculos;
 - editor administrativo de kits com escolha explícita de códigos e quantidade por item;
-- confirmação médica persistida;
-- snapshot histórico consolidado;
-- correção cross-tenant em `createTemplateVersion` e autorização por recurso no download;
 - testes de integração/E2E e Preview autenticado.
 
 ### P1

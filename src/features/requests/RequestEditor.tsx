@@ -186,11 +186,11 @@ export function RequestEditor({
     });
   }
 
-  async function onGenerate() {
+  async function onGenerate(statement: string) {
     setBusy(true);
     try {
       if (!(await persist())) return;
-      const doc = await generatePdfAction(request.id);
+      const doc = await generatePdfAction(request.id, { accepted: true, statement });
       router.push(`/guias/${request.id}/preview?doc=${doc.id}`);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Não foi possível gerar o PDF.");
@@ -666,9 +666,9 @@ export function RequestEditor({
       template={selectedTemplate}
       busy={busy}
       onClose={() => setShowGenerate(false)}
-      onConfirm={() => {
+      onConfirm={(statement) => {
         setShowGenerate(false);
-        void onGenerate();
+        void onGenerate(statement);
       }}
     />
     </div>

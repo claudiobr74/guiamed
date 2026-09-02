@@ -22,6 +22,7 @@ import type {
 import { parseQuantity } from "@/lib/quantity";
 import { materializeRequestItems } from "@/lib/requests/materialize-items";
 import { nextRequestRevision } from "@/lib/requests/revision";
+import type { FinalizedRequestSnapshot } from "@/lib/requests/finalized-snapshot";
 
 function now() {
   return new Date().toISOString();
@@ -413,6 +414,10 @@ export async function createTemplateVersion(
   },
 ): Promise<{ templateId: string; versionId: string; version: number }> {
   const templateId = data.templateId ?? orgCollection(db, orgId, "templates").doc().id;
+  if (data.templateId) {
+    const ownedTemplate = await orgCollection(db, orgId, "templates").doc(data.templateId).get();
+    if (!ownedTemplate.exists) throw new Error("Template não encontrado nesta organização.");
+  }
   await orgCollection(db, orgId, "templates").doc(templateId).set({
     name: data.name,
     institutionId: data.institutionId ?? null,
@@ -421,7 +426,10 @@ export async function createTemplateVersion(
     active: true,
     updatedAt: now(),
   }, { merge: true });
-  const existing = await db.collection("templateVersions").where("templateId", "==", templateId).get();
+  const existing = await db.collection("templateVersions")
+    .where("organizationId", "==", orgId)
+    .where("templateId", "==", templateId)
+    .get();
   const version = existing.docs.reduce((max, doc) => Math.max(max, Number(doc.data().version ?? 0)), 0) + 1;
   await Promise.all(
     existing.docs.map((doc) => doc.ref.set({ active: false }, { merge: true })),
@@ -651,8 +659,11 @@ export async function finalizeWithGeneratedDocument(
     requestId: string;
     templateVersionId: string;
     expectedRequestUpdatedAt: string;
+    expectedRequestRevision: number;
     filePath: string;
     fileHash: string;
+    requestSnapshot: FinalizedRequestSnapshot;
+    confirmationStatement: string;
   },
 ): Promise<GeneratedDocument> {
   const requestRef = orgCollection(db, user.organizationId, "requests").doc(data.requestId);
@@ -672,18 +683,31 @@ export async function finalizeWithGeneratedDocument(
         "A solicitação foi alterada durante a geração. Revise os dados e tente novamente.",
       );
     }
+    if (Number(request.data()?.revision ?? 0) !== data.expectedRequestRevision) {
+      throw new Error("A guia foi alterada desde a última revisão. Revise novamente antes de gerar.");
+    }
+
+    const medicalConfirmation = {
+      userId: user.id,
+      statement: data.confirmationStatement,
+      confirmedAt: createdAt,
+      requestRevision: data.expectedRequestRevision,
+    };
 
     transaction.set(documentRef, {
+      organizationId: user.organizationId,
       requestId: data.requestId,
       templateVersionId: data.templateVersionId,
       filePath: data.filePath,
       fileHash: data.fileHash,
       createdAt,
       createdBy: user.id,
+      requestSnapshot: data.requestSnapshot,
+      medicalConfirmation,
     });
     transaction.set(
       requestRef,
-      { status: "finalized", finalizedAt: createdAt, updatedAt: createdAt },
+      { status: "finalized", finalizedAt: createdAt, updatedAt: createdAt, medicalConfirmation },
       { merge: true },
     );
     transaction.set(finalizeAuditRef, {

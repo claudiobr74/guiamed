@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Doctor, DocumentTemplate, Institution, Patient, SurgicalRequest } from "@/types/domain";
 import { Icon } from "@/components/icons";
 import { Button, Modal } from "@/components/ui";
+import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
 
 function ageFromBirthDate(iso: string | null | undefined): number | null {
   if (!iso) return null;
@@ -35,7 +36,7 @@ export function GenerateConfirmModal({
   template?: DocumentTemplate | null;
   busy?: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (statement: string) => void;
 }) {
   const [reviewed, setReviewed] = useState(false);
   const age = ageFromBirthDate(patient?.birthDate);
@@ -92,13 +93,13 @@ export function GenerateConfirmModal({
             onChange={(e) => setReviewed(e.target.checked)}
             className="size-[18px] rounded border border-[#e2e8f0]"
           />
-          Revisei os dados clínicos e os procedimentos.
+          {MEDICAL_REVIEW_STATEMENT}
         </label>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" type="button" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="button" disabled={!reviewed || busy} onClick={onConfirm}>
+          <Button type="button" disabled={!reviewed || busy} onClick={() => onConfirm(MEDICAL_REVIEW_STATEMENT)}>
             {busy ? "Gerando..." : "Gerar PDF"}
           </Button>
         </div>

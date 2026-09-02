@@ -5,11 +5,14 @@ import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
 import { getObject } from "@/lib/storage";
 import type { SessionUser } from "@/types/domain";
 import { validateRequestForFinalization } from "@/lib/requests/finalization-validation";
+import { buildFinalizedRequestSnapshot, type FinalizedRequestSnapshot } from "@/lib/requests/finalized-snapshot";
 
 export interface RenderedRequestPdf {
   bytes: Uint8Array;
   templateVersionId: string;
   requestUpdatedAt: string;
+  requestRevision: number;
+  requestSnapshot: FinalizedRequestSnapshot;
 }
 
 /**
@@ -35,6 +38,7 @@ export async function renderRequestPdf(
   if (!version) throw new Error("Versão do template não encontrada.");
   const templates = await repos.listTemplates(db, user.organizationId);
   const template = templates.find((candidate) => candidate.id === request.templateId) ?? null;
+  if (!template) throw new Error("Template não encontrado nesta organização.");
 
   const [mappings, repeaters] = await Promise.all([
     repos.listMappings(db, user.organizationId, version.id),
@@ -67,5 +71,7 @@ export async function renderRequestPdf(
     bytes: filled.bytes,
     templateVersionId: version.id,
     requestUpdatedAt: request.updatedAt,
+    requestRevision: request.revision,
+    requestSnapshot: buildFinalizedRequestSnapshot(request, template, version),
   };
 }

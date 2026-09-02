@@ -14,6 +14,7 @@ import { renderRequestPdf } from "@/lib/pdf/render-request";
 import { deleteObject, putObject } from "@/lib/storage";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { randomUUID } from "node:crypto";
+import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
 import type {
   Doctor,
   FieldMapping,
@@ -251,21 +252,29 @@ export async function uploadTemplateAction(formData: FormData) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const meta = await inspectPdf(bytes);
   const stored = await putObject("pdf-templates", user.organizationId, file.name, bytes);
-  const created = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.createTemplateVersion(db, user.organizationId, user.id, {
-      templateId: String(formData.get("templateId") || "") || undefined,
-      name: String(formData.get("name") || file.name),
-      institutionId: String(formData.get("institutionId") || "") || null,
-      healthInsurerId: String(formData.get("healthInsurerId") || "") || null,
-      filePath: stored.filePath,
-      fileHash: stored.fileHash,
-      pageCount: meta.pageCount,
-      pageWidth: meta.pageWidth,
-      pageHeight: meta.pageHeight,
-      hasAcroform: meta.hasAcroform,
-      acroformFields: meta.acroformFields,
-    }),
-  );
+  let created;
+  try {
+    created = await withOrganizationContext(user.organizationId, user.id, (db) =>
+      repos.createTemplateVersion(db, user.organizationId, user.id, {
+        templateId: String(formData.get("templateId") || "") || undefined,
+        name: String(formData.get("name") || file.name),
+        institutionId: String(formData.get("institutionId") || "") || null,
+        healthInsurerId: String(formData.get("healthInsurerId") || "") || null,
+        filePath: stored.filePath,
+        fileHash: stored.fileHash,
+        pageCount: meta.pageCount,
+        pageWidth: meta.pageWidth,
+        pageHeight: meta.pageHeight,
+        hasAcroform: meta.hasAcroform,
+        acroformFields: meta.acroformFields,
+      }),
+    );
+  } catch (error) {
+    await deleteObject(stored.filePath, user.organizationId).catch((cleanupError) => {
+      console.error("Falha ao remover template órfão", cleanupError);
+    });
+    throw error;
+  }
   const suggestions = meta.acroformFields.map((field) => ({
     pdfFieldName: field.name,
     suggested: suggestSemanticField(field.name),
@@ -287,8 +296,11 @@ export async function saveRepeaterAction(repeater: Omit<PdfRepeater, "id"> & { i
   );
 }
 
-export async function generatePdfAction(requestId: string) {
+export async function generatePdfAction(requestId: string, confirmation: { accepted: boolean; statement: string }) {
   const user = await requireUser();
+  if (!confirmation.accepted || confirmation.statement !== MEDICAL_REVIEW_STATEMENT) {
+    throw new Error("Confirme a revisão médica antes de finalizar a guia.");
+  }
   return withOrganizationContext(user.organizationId, user.id, async (db) => {
     const rendered = await renderRequestPdf(db, user, requestId);
     const stored = await putObject(
@@ -302,8 +314,11 @@ export async function generatePdfAction(requestId: string) {
         requestId,
         templateVersionId: rendered.templateVersionId,
         expectedRequestUpdatedAt: rendered.requestUpdatedAt,
+        expectedRequestRevision: rendered.requestRevision,
         filePath: stored.filePath,
         fileHash: stored.fileHash,
+        requestSnapshot: rendered.requestSnapshot,
+        confirmationStatement: confirmation.statement,
       });
     } catch (error) {
       try {
