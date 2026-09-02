@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CODE_NOT_FOUND, DEFAULT_PROCEDURE_QUANTITY, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
 import { Badge, Button, Card, Field, Input, QuantityStepper, Select, Textarea } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { KitPickerModal } from "@/features/requests/KitPickerModal";
+import { JustificationDrawer } from "@/features/requests/JustificationDrawer";
+import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";
 import {
-  draftJustificationAction,
   duplicateRequestAction,
   generatePdfAction,
   previewPdfAction,
@@ -49,6 +52,8 @@ export function RequestEditor({
   const [cidResults, setCidResults] = useState<CidCode[]>([]);
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showKit, setShowKit] = useState(false);
+  const [showAi, setShowAi] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,7 +107,8 @@ export function RequestEditor({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex items-start gap-0">
+    <div className="flex min-w-0 flex-1 flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ol className="flex flex-wrap items-center gap-4">
           {STEPS.map((label, index) => (
@@ -152,8 +158,8 @@ export function RequestEditor({
               Avançar
             </Button>
           ) : (
-            <Button type="button" onClick={() => void onGenerate()} disabled={busy || request.status !== "draft"}>
-              {busy ? "Gerando..." : "Finalizar e gerar PDF"}
+            <Button type="button" onClick={() => setShowGenerate(true)} disabled={busy || request.status !== "draft"}>
+              Finalizar e gerar PDF
             </Button>
           )}
         </div>
@@ -348,43 +354,10 @@ export function RequestEditor({
               <h2 className="text-[14px] font-bold">Procedimentos solicitados</h2>
               <Badge tone="blue">{request.items.length} selecionados</Badge>
             </div>
-            <Button variant="ghost" type="button" onClick={() => setShowKit((v) => !v)}>
+            <Button variant="ghost" type="button" onClick={() => setShowKit(true)}>
               + Usar kit cirúrgico
             </Button>
           </div>
-          {showKit ? (
-            <div className="mb-4 rounded-lg border border-[#e2e8f0] p-3">
-              {kits.length === 0 ? <p className="text-[13px] text-[#475569]">Nenhum kit cadastrado.</p> : null}
-              {kits.map((kit) => (
-                <button
-                  key={kit.id}
-                  type="button"
-                  className="flex w-full items-center justify-between py-2 text-left text-[13px]"
-                  onClick={() => {
-                    const items = kit.items.map((item, index) => ({
-                      id: crypto.randomUUID(),
-                      requestId: request.id,
-                      procedureId: item.procedureId,
-                      procedureName: item.procedureName,
-                      tussCodeId: null,
-                      ipasgoCodeId: null,
-                      tussCodeSnapshot: null,
-                      ipasgoCodeSnapshot: null,
-                      quantity: item.defaultQuantity || DEFAULT_PROCEDURE_QUANTITY,
-                      laterality: null,
-                      notes: item.notes,
-                      sortOrder: request.items.length + index,
-                    }));
-                    patch({ items: [...request.items, ...items] });
-                    setShowKit(false);
-                  }}
-                >
-                  <span className="font-semibold">{kit.name}</span>
-                  <span className="text-[#1e5fa6]">Carregar</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
           <Input
             value={procQuery}
             placeholder="Buscar procedimento, TUSS ou código IPASGO..."
@@ -478,21 +451,13 @@ export function RequestEditor({
       {step === 3 ? (
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-[14px] font-bold">Justificativa clínica</h2>
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={async () => {
-                const text = await draftJustificationAction({
-                  diagnosis: request.diagnosis ?? undefined,
-                  cids: request.cids.map((c) => ({ code: c.codeSnapshot, description: c.descriptionSnapshot })),
-                  procedures: request.items.map((i) => ({ name: i.procedureName, quantity: i.quantity })),
-                  indicationReason: request.clinicalNotes ?? undefined,
-                });
-                patch({ clinicalJustification: text });
-              }}
-            >
-              Auxílio da IA (somente fatos informados)
+            <div className="flex items-center gap-2">
+              <Icon name="file-text" size={16} />
+              <h2 className="text-[14px] font-bold">Justificativa clínica</h2>
+            </div>
+            <Button variant="ghost" type="button" onClick={() => setShowAi(true)}>
+              <Icon name="sparkle" size={12} />
+              Gerar com IA
             </Button>
           </div>
           <Field label="Achados / exames / tratamentos prévios (opcional)">
@@ -507,6 +472,7 @@ export function RequestEditor({
               value={request.clinicalJustification ?? ""}
               onChange={(e) => patch({ clinicalJustification: e.target.value })}
               className="min-h-[180px]"
+              placeholder="Use o painel lateral para gerar uma justificativa técnica com base nos fatos informados. Nada é inventado."
             />
           </Field>
         </Card>
@@ -541,6 +507,55 @@ export function RequestEditor({
           ) : null}
         </Card>
       ) : null}
+    </div>
+    <JustificationDrawer
+      open={showAi}
+      facts={{
+        diagnosis: request.diagnosis ?? undefined,
+        cids: request.cids.map((c) => ({ code: c.codeSnapshot, description: c.descriptionSnapshot })),
+        procedures: request.items.map((i) => ({ name: i.procedureName, quantity: i.quantity })),
+        indicationReason: request.clinicalNotes ?? undefined,
+      }}
+      onClose={() => setShowAi(false)}
+      onApply={(text) => patch({ clinicalJustification: text })}
+    />
+    <KitPickerModal
+      open={showKit}
+      kits={kits}
+      onClose={() => setShowKit(false)}
+      onSelect={(kit) => {
+        const items = kit.items.map((item, index) => ({
+          id: crypto.randomUUID(),
+          requestId: request.id,
+          procedureId: item.procedureId,
+          procedureName: item.procedureName,
+          tussCodeId: null,
+          ipasgoCodeId: null,
+          tussCodeSnapshot: null,
+          ipasgoCodeSnapshot: null,
+          quantity: item.defaultQuantity || DEFAULT_PROCEDURE_QUANTITY,
+          laterality: null,
+          notes: item.notes,
+          sortOrder: request.items.length + index,
+        }));
+        patch({ items: [...request.items, ...items] });
+        setShowKit(false);
+      }}
+    />
+    <GenerateConfirmModal
+      open={showGenerate}
+      request={request}
+      patient={selectedPatient}
+      doctor={selectedDoctor}
+      institution={selectedInstitution}
+      template={selectedTemplate}
+      busy={busy}
+      onClose={() => setShowGenerate(false)}
+      onConfirm={() => {
+        setShowGenerate(false);
+        void onGenerate();
+      }}
+    />
     </div>
   );
 }

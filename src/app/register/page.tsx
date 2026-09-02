@@ -1,16 +1,12 @@
 import { registerAction } from "@/app/actions";
+import { Logo } from "@/components/Logo";
 import { Button, Field, Input } from "@/components/ui";
 import Link from "next/link";
 
 export default function RegisterPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9]">
-      <div className="flex items-center gap-2">
-        <span className="flex size-[34px] items-center justify-center rounded-lg bg-[#1e5fa6] text-lg font-bold text-white">
-          +
-        </span>
-        <span className="text-[24px] font-extrabold text-[#0f172a]">GuiaMed</span>
-      </div>
+      <Logo size="lg" />
       <form action={registerAction} className="w-[380px] rounded-xl border border-[#e2e8f0] bg-white p-8">
         <h1 className="text-[18px] font-bold text-[#0f172a]">Criar organização</h1>
         <p className="mt-1 text-[13px] text-[#475569]">Cadastre a clínica e o primeiro administrador</p>
@@ -38,6 +34,7 @@ export default function RegisterPage() {
           </Link>
         </p>
       </form>
+      <p className="text-[11px] text-[#94a3b8]">GuiaMed SaaS • v1.4.2 • Segurança Certificada</p>
     </div>
   );
 }

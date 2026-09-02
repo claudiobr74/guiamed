@@ -143,6 +143,7 @@ export interface DocumentTemplate {
   documentType: string;
   active: boolean;
   currentVersion?: TemplateVersion | null;
+  versions?: TemplateVersion[];
 }
 
 export interface TemplateVersion {

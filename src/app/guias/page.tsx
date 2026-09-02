@@ -40,7 +40,16 @@ export default async function GuiasPage({
         <Button type="submit" variant="secondary">Filtrar</Button>
       </form>
       {requests.length === 0 ? (
-        <EmptyState title="Nenhuma guia encontrada" description="Ajuste a busca ou crie uma nova solicitação." />
+        <EmptyState
+          title="Nenhuma guia criada ainda"
+          description="Crie sua primeira guia para preencher formulários cirúrgicos de forma totalmente automática."
+          icon="empty-document"
+          action={
+            <form action={createRequestAction}>
+              <Button type="submit">Criar primeira guia</Button>
+            </form>
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
           <table className="w-full text-left text-[13px]">

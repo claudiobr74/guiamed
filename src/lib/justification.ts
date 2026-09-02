@@ -4,10 +4,15 @@ export interface JustificationFacts {
   procedures?: Array<{ name: string; quantity: number }>;
   ageYears?: number | null;
   sex?: string | null;
+  symptoms?: string;
+  evolutionTime?: string;
   clinicalFindings?: string;
   exams?: string;
   previousTreatments?: string;
+  functionalLimitation?: string;
+  extraNotes?: string;
   indicationReason?: string;
+  tone?: "improve" | "summarize" | "objective" | "regenerate";
 }
 
 const MISSING = "não informado";
@@ -30,6 +35,12 @@ export function buildJustificationDraft(facts: JustificationFacts): string {
   if (facts.sex) demo.push(`sexo ${facts.sex}`);
   if (demo.length > 0) lines.push(`Dados demográficos informados: ${demo.join(", ")}.`);
 
+  const symptoms = facts.symptoms?.trim();
+  if (symptoms) lines.push(`Sintomas informados: ${symptoms}.`);
+
+  const evolution = facts.evolutionTime?.trim();
+  if (evolution) lines.push(`Tempo de evolução informado: ${evolution}.`);
+
   const findings = facts.clinicalFindings?.trim();
   if (findings) lines.push(`Achados clínicos: ${findings}.`);
 
@@ -38,6 +49,12 @@ export function buildJustificationDraft(facts: JustificationFacts): string {
 
   const prev = facts.previousTreatments?.trim();
   if (prev) lines.push(`Tratamentos prévios: ${prev}.`);
+
+  const limitation = facts.functionalLimitation?.trim();
+  if (limitation) lines.push(`Limitação funcional informada: ${limitation}.`);
+
+  const extra = facts.extraNotes?.trim();
+  if (extra) lines.push(`Outras informações informadas: ${extra}.`);
 
   const reason = facts.indicationReason?.trim();
   if (reason) lines.push(`Motivo da indicação: ${reason}.`);
@@ -52,6 +69,12 @@ export function buildJustificationDraft(facts: JustificationFacts): string {
 
   if (lines.length === 0) {
     return `Não há fatos suficientes para redigir a justificativa. Informe ao menos o diagnóstico, CID ou procedimentos. Campos não fornecidos permanecem como ${MISSING} e não devem ser preenchidos por inferência.`;
+  }
+
+  if (facts.tone === "summarize" && lines.length > 2) {
+    lines.splice(Math.min(3, lines.length), lines.length - 3);
+  } else if (facts.tone === "objective") {
+    lines.push("Redigido em tom objetivo, apenas com os fatos listados.");
   }
 
   lines.push(

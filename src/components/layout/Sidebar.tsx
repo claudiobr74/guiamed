@@ -2,36 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Archive,
-  Building2,
-  FileText,
-  Home,
-  List,
-  PlusCircle,
-  Settings,
-  Stethoscope,
-  Users,
-} from "lucide-react";
 import type { SessionUser } from "@/types/domain";
 import { logoutAction } from "@/app/actions";
+import { Icon, type IconName } from "@/components/icons";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/components/ui";
 
-const operational = [
-  { href: "/", label: "Início", icon: Home },
-  { href: "/guias/nova", label: "Nova guia", icon: PlusCircle },
-  { href: "/guias", label: "Guias", icon: FileText },
-  { href: "/pacientes", label: "Pacientes", icon: Users },
+const operational: Array<{ href: string; label: string; icon: IconName }> = [
+  { href: "/", label: "Início", icon: "home" },
+  { href: "/guias/nova", label: "Nova guia", icon: "plus-circle" },
+  { href: "/guias", label: "Guias", icon: "file-text" },
+  { href: "/pacientes", label: "Pacientes", icon: "users" },
 ];
 
-const admin = [
-  { href: "/procedimentos", label: "Procedimentos", icon: List },
-  { href: "/kits", label: "Kits cirúrgicos", icon: Archive },
-  { href: "/templates", label: "Templates PDF", icon: FileText },
-  { href: "/tabelas", label: "Tabelas TUSS/IPASGO", icon: List },
-  { href: "/instituicoes", label: "Instituições", icon: Building2 },
-  { href: "/medicos", label: "Médicos", icon: Stethoscope },
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
+const admin: Array<{ href: string; label: string; icon: IconName }> = [
+  { href: "/procedimentos", label: "Procedimentos", icon: "list" },
+  { href: "/kits", label: "Kits cirúrgicos", icon: "archive" },
+  { href: "/templates", label: "Templates PDF", icon: "file-pdf" },
+  { href: "/tabelas", label: "Tabelas TUSS/IPASGO", icon: "list" },
+  { href: "/instituicoes", label: "Instituições", icon: "building" },
+  { href: "/medicos", label: "Médicos", icon: "stethoscope" },
+  { href: "/configuracoes", label: "Configurações", icon: "settings" },
 ];
 
 function initials(name: string) {
@@ -49,12 +40,7 @@ export function Sidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="flex h-full w-[240px] shrink-0 flex-col justify-between border-r border-[#e2e8f0] bg-white px-4 py-6">
       <div className="flex flex-col gap-6">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex size-[26px] items-center justify-center rounded-md bg-[#1e5fa6] text-[12px] font-bold text-white">
-            +
-          </span>
-          <span className="text-[18px] font-bold text-[#0f172a]">GuiaMed</span>
-        </Link>
+        <Logo href="/" size="sm" />
         <nav className="flex flex-col gap-4">
           <div>
             <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#94a3b8]">OPERACIONAL</p>
@@ -93,12 +79,12 @@ export function Sidebar({ user }: { user: SessionUser }) {
 function NavItem({
   href,
   label,
-  icon: Icon,
+  icon,
   active,
 }: {
   href: string;
   label: string;
-  icon: typeof Home;
+  icon: IconName;
   active: boolean;
 }) {
   return (
@@ -109,7 +95,7 @@ function NavItem({
         active ? "bg-[#eff6ff] font-semibold text-[#1e5fa6]" : "font-medium text-[#475569] hover:bg-[#f8fafc]",
       )}
     >
-      <Icon size={16} />
+      <Icon name={icon} size={16} />
       {label}
     </Link>
   );

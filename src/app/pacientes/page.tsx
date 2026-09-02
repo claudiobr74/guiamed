@@ -15,7 +15,11 @@ export default async function PacientesPage() {
     <AppShell user={user} title="Pacientes">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
         {patients.length === 0 ? (
-          <EmptyState title="Nenhum paciente" description="Cadastre o primeiro paciente para iniciar uma guia." />
+          <EmptyState
+            title="Nenhum paciente cadastrado"
+            description="Cadastre seus pacientes para agilizar o preenchimento de novas guias de procedimento cirúrgico."
+            icon="empty-user"
+          />
         ) : (
           <Card>
             <table className="w-full text-left text-[13px]">

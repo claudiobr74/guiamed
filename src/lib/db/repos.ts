@@ -364,12 +364,16 @@ export async function listTemplates(db: Db, orgId: string): Promise<DocumentTemp
   const snap = await orgCollection(db, orgId, "templates").get();
   const versions = await db.collection("templateVersions").where("organizationId", "==", orgId).get();
   const byTemplate = new Map<string, TemplateVersion>();
+  const versionsByTemplate = new Map<string, TemplateVersion[]>();
   for (const doc of versions.docs) {
     const version = mapVersion(doc.id, doc.data());
     const current = byTemplate.get(version.templateId);
     if (!current || (version.active && version.version >= current.version)) {
       byTemplate.set(version.templateId, version);
     }
+    const list = versionsByTemplate.get(version.templateId) ?? [];
+    list.push(version);
+    versionsByTemplate.set(version.templateId, list);
   }
   return snap.docs
     .map((doc) => {
@@ -383,6 +387,7 @@ export async function listTemplates(db: Db, orgId: string): Promise<DocumentTemp
         documentType: String(data.documentType ?? "surgical_request"),
         active: Boolean(data.active ?? true),
         currentVersion: byTemplate.get(doc.id) ?? null,
+        versions: (versionsByTemplate.get(doc.id) ?? []).sort((a, b) => b.version - a.version),
       } satisfies DocumentTemplate;
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));

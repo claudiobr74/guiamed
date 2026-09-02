@@ -55,11 +55,12 @@ export default async function DashboardPage() {
           </div>
           {recent.length === 0 ? (
             <EmptyState
-              title="Nenhuma guia ainda"
-              description="Crie a primeira solicitação cirúrgica. Com paciente, médico e template prontos, o preenchimento leva cerca de 1 a 2 minutos."
+              title="Nenhuma guia criada ainda"
+              description="Crie sua primeira guia para preencher formulários cirúrgicos de forma totalmente automática."
+              icon="empty-document"
               action={
                 <form action={createRequestAction}>
-                  <Button type="submit">Nova guia</Button>
+                  <Button type="submit">Criar primeira guia</Button>
                 </form>
               }
             />

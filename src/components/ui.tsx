@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { Icon, type IconName } from "@/components/icons";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -112,16 +113,53 @@ export function EmptyState({
   title,
   description,
   action,
+  icon = "empty-document",
 }: {
   title: string;
   description: string;
   action?: ReactNode;
+  icon?: Extract<IconName, "empty-document" | "empty-user">;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#e2e8f0] bg-white px-8 py-16 text-center">
-      <p className="text-[16px] font-semibold text-[#0f172a]">{title}</p>
-      <p className="mt-2 max-w-md text-[13px] text-[#475569]">{description}</p>
-      {action ? <div className="mt-5">{action}</div> : null}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-[#e2e8f0] bg-white px-10 py-16 text-center">
+      <span className="flex size-16 items-center justify-center rounded-full bg-[#eff6ff]">
+        <Icon name={icon} size={32} />
+      </span>
+      <p className="mt-6 text-[16px] font-bold text-[#0f172a]">{title}</p>
+      <p className="mt-2 max-w-[300px] text-[13px] text-[#475569]">{description}</p>
+      {action ? <div className="mt-6">{action}</div> : null}
+    </div>
+  );
+}
+
+export function Modal({
+  open,
+  onClose,
+  children,
+  widthClassName = "w-[560px]",
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  widthClassName?: string;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className={cn(
+          "max-h-[90vh] overflow-auto rounded-2xl bg-white p-8 shadow-[0_16px_16px_rgba(0,0,0,0.1)]",
+          widthClassName,
+        )}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }

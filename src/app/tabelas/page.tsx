@@ -1,9 +1,9 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { ImportCodesPanel } from "@/features/codes/ImportCodesPanel";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withRls } from "@/lib/db/client";
 import { listCodes } from "@/lib/db/repos";
-import { importCodesAction } from "@/app/actions";
 
 export default async function TabelasPage() {
   const user = await requirePageAdmin();
@@ -12,7 +12,11 @@ export default async function TabelasPage() {
     <AppShell user={user} title="Tabelas TUSS / IPASGO">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
         {codes.length === 0 ? (
-          <EmptyState title="Nenhum código importado" description="A IA não inventa TUSS, IPASGO ou CID. Importe a tabela oficial (CSV, XLSX ou JSON)." />
+          <EmptyState
+            title="Nenhum código importado"
+            description="A IA não inventa TUSS, IPASGO ou CID. Importe a tabela oficial (CSV, XLSX ou JSON)."
+            icon="empty-document"
+          />
         ) : (
           <Card>
             <table className="w-full text-left text-[13px]">
@@ -33,29 +37,7 @@ export default async function TabelasPage() {
         {user.role === "admin" ? (
           <Card>
             <h2 className="mb-3 text-[14px] font-bold">Importar tabela</h2>
-            <form
-              action={async (formData) => {
-                "use server";
-                const result = await importCodesAction(formData);
-                if (!result.ok) {
-                  throw new Error(result.issues.map((i) => `Linha ${i.row}: ${i.message}`).join(" | "));
-                }
-              }}
-              className="flex flex-col gap-3"
-            >
-              <Field label="Sistema">
-                <Select name="codeSystem" defaultValue="TUSS">
-                  <option value="TUSS">TUSS</option>
-                  <option value="IPASGO">IPASGO</option>
-                </Select>
-              </Field>
-              <Field label="Versão"><Input name="version" required placeholder="2026.1" /></Field>
-              <Field label="Arquivo">
-                <Input name="file" type="file" accept=".csv,.xlsx,.xls,.json" required />
-              </Field>
-              <p className="text-[12px] text-[#475569]">Colunas: code, description, version, code_system, valid_from, valid_until, procedure_name. Importação idempotente por sistema+código+versão.</p>
-              <Button type="submit">Importar</Button>
-            </form>
+            <ImportCodesPanel />
           </Card>
         ) : null}
       </div>

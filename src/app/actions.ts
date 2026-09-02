@@ -3,12 +3,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth/session";
-import { loginWithPassword, registerOrganization } from "@/lib/db/auth";
+import { loginWithPassword, registerOrganization, requestPasswordReset } from "@/lib/db/auth";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { withRls } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { parseQuantity } from "@/lib/quantity";
 import { validateImportRows, parseCsv, type ImportRow } from "@/lib/import-codes";
+import { summarizeImportDiff } from "@/lib/import-diff";
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
 import { inspectPdf } from "@/lib/pdf/inspect";
 import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
@@ -59,6 +60,12 @@ export async function logoutAction() {
   const store = await cookies();
   store.delete(SESSION_COOKIE);
   redirect("/login");
+}
+
+export async function requestPasswordResetAction(email: string) {
+  if (!email.trim()) throw new Error("Informe o e-mail.");
+  await requestPasswordReset(email);
+  return { ok: true as const };
 }
 
 export async function savePatientAction(data: Partial<Patient> & { fullName: string; id?: string }) {
@@ -169,21 +176,13 @@ export async function draftJustificationAction(facts: JustificationFacts) {
   return buildJustificationDraft(facts);
 }
 
-export async function importCodesAction(formData: FormData) {
-  const user = await requireAdmin();
-  const file = formData.get("file");
-  const defaultSystem = String(formData.get("codeSystem") ?? "TUSS");
-  const version = String(formData.get("version") ?? "");
-  if (!(file instanceof File)) throw new Error("Arquivo ausente.");
+async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format: "csv" | "xlsx" | "json" }> {
   const name = file.name.toLowerCase();
-  let rows: ImportRow[] = [];
-  let format: "csv" | "xlsx" | "json" = "csv";
   if (name.endsWith(".json")) {
-    format = "json";
     const parsed = JSON.parse(await file.text()) as ImportRow[];
-    rows = parsed;
-  } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-    format = "xlsx";
+    return { rows: parsed, format: "json" };
+  }
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await file.arrayBuffer());
     const sheet = wb.worksheets[0];
@@ -192,6 +191,7 @@ export async function importCodesAction(formData: FormData) {
     sheet.getRow(1).eachCell((cell, col) => {
       header[col] = String(cell.value ?? "").toLowerCase();
     });
+    const rows: ImportRow[] = [];
     sheet.eachRow((row, index) => {
       if (index === 1) return;
       const obj: ImportRow = {};
@@ -208,9 +208,44 @@ export async function importCodesAction(formData: FormData) {
       });
       rows.push(obj);
     });
-  } else {
-    rows = parseCsv(await file.text());
+    return { rows, format: "xlsx" };
   }
+  return { rows: parseCsv(await file.text()), format: "csv" };
+}
+
+export async function previewImportCodesAction(formData: FormData) {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  const defaultSystem = String(formData.get("codeSystem") ?? "TUSS");
+  const version = String(formData.get("version") ?? "");
+  if (!(file instanceof File)) throw new Error("Arquivo ausente.");
+  const { rows } = await parseImportFile(file);
+  const validated = validateImportRows(
+    rows.map((r) => ({ ...r, version: r.version || version, code_system: r.code_system || defaultSystem })),
+    defaultSystem,
+  );
+  if (validated.issues.length > 0) {
+    return { ok: false as const, issues: validated.issues };
+  }
+  const existing = await withRls(user.organizationId, user.id, (db) => repos.listCodes(db, user.organizationId));
+  const diff = summarizeImportDiff(validated.rows, existing);
+  return {
+    ok: true as const,
+    filename: file.name,
+    sizeBytes: file.size,
+    codeSystem: defaultSystem,
+    version: version || validated.rows[0]?.version || "1",
+    ...diff,
+  };
+}
+
+export async function importCodesAction(formData: FormData) {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  const defaultSystem = String(formData.get("codeSystem") ?? "TUSS");
+  const version = String(formData.get("version") ?? "");
+  if (!(file instanceof File)) throw new Error("Arquivo ausente.");
+  const { rows, format } = await parseImportFile(file);
   const validated = validateImportRows(
     rows.map((r) => ({ ...r, version: r.version || version, code_system: r.code_system || defaultSystem })),
     defaultSystem,

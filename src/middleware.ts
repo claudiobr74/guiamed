@@ -8,8 +8,11 @@ export function middleware(request: NextRequest) {
   const publicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
+    pathname.startsWith("/recuperar-senha") ||
+    pathname.startsWith("/icons") ||
     pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico";
+    pathname === "/favicon.ico" ||
+    /\.(svg|png|jpg|jpeg|gif|webp|ico)$/.test(pathname);
   if (!session && !publicPath) {
     return NextResponse.redirect(new URL("/login", request.url));
   }

@@ -18,24 +18,47 @@ export default async function TemplatesPage() {
     <AppShell user={user} title="Templates PDF">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
         {templates.length === 0 ? (
-          <EmptyState title="Nenhum template" description="Envie o PDF original da instituição. O GuiaMed preenche esse arquivo; não redesenha o formulário." />
+          <EmptyState
+            title="Nenhum template cadastrado"
+            description="Adicione o formulário PDF utilizado pela instituição e mapeie onde cada dado clínico deve ser renderizado."
+            icon="empty-document"
+          />
         ) : (
           <Card>
             <ul className="divide-y divide-[#e2e8f0] text-[13px]">
               {templates.map((t) => (
-                <li key={t.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-semibold">{t.name}</p>
-                    <p className="text-[#94a3b8]">
-                      {t.currentVersion
-                        ? `v${t.currentVersion.version} • ${t.currentVersion.pageCount} pág. • ${t.currentVersion.hasAcroform ? "AcroForm" : "estático"}`
-                        : "sem arquivo"}
-                    </p>
+                <li key={t.id} className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">{t.name}</p>
+                      <p className="text-[#94a3b8]">
+                        {t.currentVersion
+                          ? `v${t.currentVersion.version} • ${t.currentVersion.pageCount} pág. • ${t.currentVersion.hasAcroform ? "AcroForm" : "estático"}`
+                          : "sem arquivo"}
+                      </p>
+                    </div>
+                    {t.currentVersion ? (
+                      <Link className="font-semibold text-[#1e5fa6]" href={`/templates/${t.currentVersion.id}/mapper`}>
+                        Mapear
+                      </Link>
+                    ) : null}
                   </div>
-                  {t.currentVersion ? (
-                    <Link className="font-semibold text-[#1e5fa6]" href={`/templates/${t.currentVersion.id}/mapper`}>
-                      Mapear
-                    </Link>
+                  {(t.versions?.length ?? 0) > 1 ? (
+                    <ul className="mt-2 space-y-1 text-[12px] text-[#475569]">
+                      {t.versions?.map((v) => (
+                        <li key={v.id} className="flex items-center justify-between">
+                          <span>
+                            Versão {v.version}
+                            {v.active ? " • atual" : ""}
+                            {" • "}
+                            {new Date(v.createdAt).toLocaleDateString("pt-BR")}
+                          </span>
+                          <Link className="font-semibold text-[#1e5fa6]" href={`/templates/${v.id}/mapper`}>
+                            Abrir
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                 </li>
               ))}

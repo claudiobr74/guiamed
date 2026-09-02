@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseCsv, validateImportRows } from "@/lib/import-codes";
+import { summarizeImportDiff } from "@/lib/import-diff";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { buildJustificationDraft } from "@/lib/justification";
 
@@ -21,6 +22,26 @@ describe("importação", () => {
     const rows = parseCsv("code,description,version\n1,Teste,2026.1");
     expect(rows[0]?.code).toBe("1");
   });
+
+  it("resume a diferença sem inventar conflitos", () => {
+    const diff = summarizeImportDiff(
+      [
+        { codeSystem: "TUSS", code: "1", description: "Novo", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
+        { codeSystem: "TUSS", code: "2", description: "Alterado", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
+        { codeSystem: "TUSS", code: "3", description: "Igual", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
+        { codeSystem: "TUSS", code: "4", description: "Velho", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: false },
+      ],
+      [
+        { codeSystem: "TUSS", code: "2", version: "2026.1", description: "Antigo", active: true },
+        { codeSystem: "TUSS", code: "3", version: "2026.1", description: "Igual", active: true },
+        { codeSystem: "TUSS", code: "4", version: "2026.1", description: "Velho", active: true },
+      ],
+    );
+    expect(diff.inserted).toBe(1);
+    expect(diff.descriptionChanged).toBe(1);
+    expect(diff.unchanged).toBe(1);
+    expect(diff.discontinued).toBe(1);
+  });
 });
 
 describe("mapeamento", () => {
@@ -33,6 +54,12 @@ describe("justificativa", () => {
   it("não inventa fatos", () => {
     const text = buildJustificationDraft({ diagnosis: "hérnia de disco" });
     expect(text).toContain("hérnia de disco");
+    expect(text.toLowerCase()).not.toContain("provavelmente");
+  });
+
+  it("inclui apenas sintomas informados", () => {
+    const text = buildJustificationDraft({ symptoms: "cervicalgia irradiada" });
+    expect(text).toContain("cervicalgia irradiada");
     expect(text.toLowerCase()).not.toContain("provavelmente");
   });
 });
