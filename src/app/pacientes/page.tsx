@@ -35,21 +35,22 @@ export default async function PacientesPage({
         ) : (
           <Card>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-[12px] text-[#64748b]">Exibindo até 50 pacientes por página.</p>
+              <p className="text-[12px] text-[#64748b]">Exibindo até 50 pacientes por página. Clique no nome para editar.</p>
               {cursor ? <Link href="/pacientes" className="text-[12px] font-semibold text-[#1e5fa6]">Voltar ao início</Link> : null}
             </div>
             {patients.length === 0 ? (
               <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais pacientes nesta paginação.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-[13px]">
-                  <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">CPF</th><th className="pb-2">Convênio</th></tr></thead>
+                <table className="w-full min-w-[620px] text-left text-[13px]">
+                  <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">CPF</th><th className="pb-2">Convênio</th><th className="pb-2">Carteirinha</th></tr></thead>
                   <tbody>
                     {patients.map((p) => (
                       <tr key={p.id} className="border-t border-[#e2e8f0]">
-                        <td className="py-2 font-semibold">{p.fullName}</td>
+                        <td className="py-2 font-semibold"><Link href={`/pacientes/${p.id}`} className="text-[#1e5fa6] hover:underline">{p.fullName}</Link></td>
                         <td>{maskCpfForList(p.cpf)}</td>
                         <td>{p.healthInsurerName ?? "—"}</td>
+                        <td>{p.insuranceCard ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -77,7 +78,9 @@ export default async function PacientesPage({
                 fullName: String(formData.get("fullName")),
                 birthDate: String(formData.get("birthDate") || "") || null,
                 cpf: String(formData.get("cpf") || "") || null,
+                sex: (String(formData.get("sex") || "") || null) as "F" | "M" | "I" | null,
                 phone: String(formData.get("phone") || "") || null,
+                email: String(formData.get("email") || "") || null,
                 insuranceCard: String(formData.get("insuranceCard") || "") || null,
                 healthInsurerId: String(formData.get("healthInsurerId") || "") || null,
               });
@@ -86,13 +89,22 @@ export default async function PacientesPage({
           >
             <Field label="Nome completo"><Input name="fullName" required /></Field>
             <Field label="Nascimento"><Input name="birthDate" type="date" /></Field>
-            <Field label="CPF"><Input name="cpf" /></Field>
-            <Field label="Telefone"><Input name="phone" /></Field>
+            <Field label="Sexo">
+              <Select name="sex" defaultValue="">
+                <option value="">Não informado</option>
+                <option value="F">Feminino</option>
+                <option value="M">Masculino</option>
+                <option value="I">Indeterminado / outro registro</option>
+              </Select>
+            </Field>
+            <Field label="CPF"><Input name="cpf" inputMode="numeric" /></Field>
+            <Field label="Telefone"><Input name="phone" inputMode="tel" /></Field>
+            <Field label="E-mail"><Input name="email" type="email" /></Field>
             <Field label="Carteirinha"><Input name="insuranceCard" /></Field>
             <Field label="Convênio">
               <Select name="healthInsurerId" defaultValue="">
                 <option value="">Nenhum</option>
-                {insurers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                {insurers.filter((insurer) => insurer.active).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
               </Select>
             </Field>
             <Button type="submit">Cadastrar</Button>
