@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
+import { saveInstitutionAction, saveInsurerAction } from "@/features/admin/actions";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { listInstitutionsPage, listInsurersPage } from "@/lib/db/admin-page";
-import { saveInstitutionAction, saveInsurerAction } from "@/app/actions";
 import type { HealthInsurer, Institution, InstitutionKind } from "@/types/domain";
 
 const KIND_LABEL: Record<InstitutionKind, string> = {
