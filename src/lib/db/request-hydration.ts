@@ -32,11 +32,7 @@ function mapInsurer(orgId: string, id: string, data: DocumentData): HealthInsure
   };
 }
 
-/**
- * Hidrata uma solicitação lendo apenas os documentos referenciados por ela.
- * Diferentemente do helper legado, não varre todas as instituições/convênios
- * para localizar dois IDs já conhecidos.
- */
+/** Hidrata uma solicitação lendo apenas os documentos referenciados por ela. */
 export async function hydrateRequestDirect(
   db: Db,
   orgId: string,
@@ -70,6 +66,8 @@ export async function hydrateRequestDirect(
     healthInsurerId,
     templateId: (data.templateId as string | null) ?? null,
     templateVersionId: (data.templateVersionId as string | null) ?? null,
+    tussTableKey: (data.tussTableKey as string | null) ?? null,
+    tussTableName: (data.tussTableName as string | null) ?? null,
     diagnosis: (data.diagnosis as string | null) ?? null,
     clinicalJustification: (data.clinicalJustification as string | null) ?? null,
     clinicalNotes: (data.clinicalNotes as string | null) ?? null,
