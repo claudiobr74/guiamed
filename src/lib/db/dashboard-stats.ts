@@ -1,33 +1,31 @@
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
-
-function nextUtcDayStart(date: Date): string {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + 1);
-  next.setUTCHours(0, 0, 0, 0);
-  return next.toISOString();
-}
-
-function nextUtcMonthStart(date: Date): string {
-  const next = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
-  return next.toISOString();
-}
+import {
+  DEFAULT_ORGANIZATION_TIME_ZONE,
+  clinicalDayRange,
+  clinicalMonthRange,
+} from "@/lib/time/clinical-calendar";
 
 /**
- * Usa aggregate count do Firestore: o dashboard não precisa baixar todos os
- * documentos de requests apenas para calcular quatro números.
+ * Usa aggregate count do Firestore: o dashboard não baixa requests apenas para
+ * calcular métricas. Os limites de dia/mês seguem o calendário clínico da
+ * organização; enquanto não houver preferência por tenant, o default brasileiro
+ * é America/Sao_Paulo.
  */
-export async function dashboardStatsAggregated(db: Db, orgId: string) {
-  const now = new Date();
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-  const tomorrowStart = nextUtcDayStart(now);
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-  const nextMonthStart = nextUtcMonthStart(now);
+export async function dashboardStatsAggregated(
+  db: Db,
+  orgId: string,
+  input: { now?: Date; timeZone?: string } = {},
+) {
+  const now = input.now ?? new Date();
+  const timeZone = input.timeZone ?? DEFAULT_ORGANIZATION_TIME_ZONE;
+  const day = clinicalDayRange(now, timeZone);
+  const month = clinicalMonthRange(now, timeZone);
   const requests = orgCollection(db, orgId, "requests");
 
   const [todaySnap, monthSnap, draftSnap, generatedSnap] = await Promise.all([
-    requests.where("createdAt", ">=", todayStart).where("createdAt", "<", tomorrowStart).count().get(),
-    requests.where("createdAt", ">=", monthStart).where("createdAt", "<", nextMonthStart).count().get(),
+    requests.where("createdAt", ">=", day.start.toISOString()).where("createdAt", "<", day.end.toISOString()).count().get(),
+    requests.where("createdAt", ">=", month.start.toISOString()).where("createdAt", "<", month.end.toISOString()).count().get(),
     requests.where("status", "==", "draft").count().get(),
     requests.where("status", "==", "finalized").count().get(),
   ]);
