@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, parseSheetMatrix, validateImportRows } from "@/lib/import-codes";
+import { normalizeImportDate, parseCsv, parseSheetMatrix, validateImportRows } from "@/lib/import-codes";
 import { summarizeImportDiff } from "@/lib/import-diff";
 import { buildImportPreview } from "@/lib/import-preview";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
@@ -17,6 +17,25 @@ describe("importação", () => {
     );
     expect(result.issues.some((i) => i.message.includes("duplicado"))).toBe(true);
     expect(result.issues.some((i) => i.message.includes("ausente"))).toBe(true);
+  });
+
+  it("normaliza vigência brasileira e ISO sem timezone", () => {
+    expect(normalizeImportDate("03/09/2026")).toEqual({ value: "2026-09-03", valid: true });
+    expect(normalizeImportDate("2026-09-03T23:59:00Z")).toEqual({ value: "2026-09-03", valid: true });
+  });
+
+  it("rejeita datas impossíveis e intervalo invertido", () => {
+    const result = validateImportRows(
+      [
+        { code: "10001", description: "Data impossível", version: "1", valid_from: "31/02/2026" },
+        { code: "10002", description: "Intervalo invertido", version: "1", valid_from: "2026-10-01", valid_until: "2026-09-30" },
+      ],
+      "TUSS",
+    );
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ row: 1, field: "valid_from" }),
+      expect.objectContaining({ row: 2, field: "valid_until", message: expect.stringContaining("anterior") }),
+    ]));
   });
 
   it("csv", () => {
