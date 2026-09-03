@@ -615,7 +615,7 @@ export function RequestEditor({
             </div>
             <Button variant="ghost" type="button" onClick={() => setShowAi(true)}>
               <Icon name="sparkle" size={12} />
-              Gerar com IA
+              Gerar justificativa
             </Button>
           </div>
           <Field label="Achados / exames / tratamentos prévios (opcional)">
