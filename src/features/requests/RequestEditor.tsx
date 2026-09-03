@@ -20,6 +20,7 @@ import {
 import { parseQuantity } from "@/lib/quantity";
 import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
 import { resolveTemplateSelection } from "@/lib/templates/compatibility";
+import { maskCpf } from "@/lib/personal-data";
 
 const STEPS = ["Paciente", "Diagnóstico", "Procedimentos", "Justificativa", "Revisão"] as const;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -265,6 +266,7 @@ export function RequestEditor({
         <ol className="flex w-full items-center gap-4 overflow-x-auto pb-1 xl:w-auto">
           {STEPS.map((label, index) => (
             <li key={label} className="flex items-center gap-2">
+              {index > 0 ? <span aria-hidden="true" className="text-[13px] text-[#cbd5e1]">›</span> : null}
               <button
                 type="button"
                 onClick={() => setStep(index)}
@@ -355,7 +357,7 @@ export function RequestEditor({
                         onClick={() => applyPatient(p)}
                       >
                         <span className="font-semibold">{p.fullName}</span>
-                        <span className="text-[#64748b]">{p.cpf ?? "sem CPF"}</span>
+                        <span className="text-[#64748b]">{p.cpf ? maskCpf(p.cpf) : "sem CPF"}</span>
                       </button>
                     </li>
                   ))}
@@ -366,7 +368,7 @@ export function RequestEditor({
                 <div>
                   <p className="text-[14px] font-bold text-[#1e5fa6]">{selectedPatient?.fullName}</p>
                   <p className="text-[12px] text-[#475569]">
-                    Nascimento: {selectedPatient?.birthDate ?? "—"} • CPF: {selectedPatient?.cpf ?? "—"}
+                    Nascimento: {selectedPatient?.birthDate ?? "—"} • CPF: {selectedPatient?.cpf ? maskCpf(selectedPatient.cpf) : "—"}
                   </p>
                 </div>
                 <div className="sm:text-right">
@@ -503,7 +505,28 @@ export function RequestEditor({
       ) : null}
 
       {step === 2 ? (
-        <Card>
+        <div className="flex flex-col gap-4">
+          <section aria-labelledby="clinical-context-title" className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p id="clinical-context-title" className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">Contexto clínico</p>
+                <p className="mt-1 text-[13px] text-[#0f172a]">
+                  <span className="font-semibold">Diagnóstico:</span> {request.diagnosis?.trim() || "Não informado"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2" aria-label="CID selecionados">
+                  {request.cids.length > 0 ? request.cids.map((cid) => (
+                    <span key={cid.id} className="rounded-full bg-[#eff6ff] px-2.5 py-1 text-[11px] font-medium text-[#1e5fa6]">
+                      CID {cid.codeSnapshot} — {cid.descriptionSnapshot}
+                    </span>
+                  )) : <span className="text-[12px] text-[#b45309]">Nenhum CID selecionado.</span>}
+                </div>
+              </div>
+              <button type="button" className="text-[12px] font-semibold text-[#1e5fa6] hover:underline" onClick={() => setStep(1)}>
+                Editar diagnóstico
+              </button>
+            </div>
+          </section>
+          <Card>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h2 className="text-[14px] font-bold">Procedimentos solicitados</h2>
@@ -608,7 +631,8 @@ export function RequestEditor({
               </tbody>
             </table>
           </div>
-        </Card>
+          </Card>
+        </div>
       ) : null}
 
       {step === 3 ? (
