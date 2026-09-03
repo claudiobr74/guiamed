@@ -22,6 +22,8 @@ import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
 import { resolveTemplateSelection } from "@/lib/templates/compatibility";
 
 const STEPS = ["Paciente", "Diagnóstico", "Procedimentos", "Justificativa", "Revisão"] as const;
+const SEARCH_DEBOUNCE_MS = 250;
+const MIN_SEARCH_LENGTH = 2;
 
 export function RequestEditor({
   initial,
@@ -136,6 +138,63 @@ export function RequestEditor({
       if (timer.current) clearTimeout(timer.current);
     };
   }, [persist, request]);
+
+  useEffect(() => {
+    const query = patientQuery.trim();
+    if (query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchPatientsAction(query)
+        .then((results) => {
+          if (!cancelled) setPatientResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setPatientResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [patientQuery]);
+
+  useEffect(() => {
+    const query = cidQuery.trim();
+    if (query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchCidsAction(query)
+        .then((results) => {
+          if (!cancelled) setCidResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setCidResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [cidQuery]);
+
+  useEffect(() => {
+    const query = procQuery.trim();
+    if (query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchProceduresAction(query)
+        .then((results) => {
+          if (!cancelled) setProcResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setProcResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [procQuery]);
 
   function patch(partial: Partial<SurgicalRequest>) {
     clientSequence.current += 1;
@@ -278,10 +337,11 @@ export function RequestEditor({
                 <Input
                   value={patientQuery}
                   placeholder="Nome ou CPF"
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const q = e.target.value;
                     setPatientQuery(q);
-                    setPatientResults(await searchPatientsAction(q));
+                    if (!q.trim()) setPatientResults(patients);
+                    else if (q.trim().length < MIN_SEARCH_LENGTH) setPatientResults([]);
                   }}
                 />
                 <ul className="mt-2 divide-y divide-[#e2e8f0] rounded-lg border border-[#e2e8f0]">
@@ -397,10 +457,10 @@ export function RequestEditor({
             <Input
               value={cidQuery}
               placeholder="Pesquisar diagnóstico ou CID..."
-              onChange={async (e) => {
+              onChange={(e) => {
                 const q = e.target.value;
                 setCidQuery(q);
-                setCidResults(await searchCidsAction(q));
+                if (q.trim().length < MIN_SEARCH_LENGTH) setCidResults([]);
               }}
             />
           </Field>
@@ -454,10 +514,10 @@ export function RequestEditor({
           <Input
             value={procQuery}
             placeholder="Buscar procedimento, TUSS ou código IPASGO..."
-            onChange={async (e) => {
+            onChange={(e) => {
               const q = e.target.value;
               setProcQuery(q);
-              setProcResults(await searchProceduresAction(q));
+              if (q.trim().length < MIN_SEARCH_LENGTH) setProcResults([]);
             }}
           />
           {procResults.length > 0 ? (
