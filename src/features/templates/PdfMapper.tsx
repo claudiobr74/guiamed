@@ -22,26 +22,38 @@ export function PdfMapper({
   const [selected, setSelected] = useState<string | null>(null);
   const [semantic, setSemantic] = useState("patient.full_name");
   const [status, setStatus] = useState("");
-  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number; pointerId: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 1, height: 1 });
   const pageSize = { w: version.pageWidth ?? 595, h: version.pageHeight ?? 842 };
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const pdfjs = await import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-      const doc = await pdfjs.getDocument({ url: fileUrl }).promise;
-      const pdfPage = await doc.getPage(page);
-      const viewport = pdfPage.getViewport({ scale: 1.2 });
-      const canvas = canvasRef.current;
-      if (!canvas || cancelled) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      setCanvasSize({ width: viewport.width, height: viewport.height });
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+      try {
+        const pdfjs = await import("pdfjs-dist");
+        if (typeof Worker !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort) {
+          pdfjs.GlobalWorkerOptions.workerPort = new Worker(
+            new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
+            { type: "module" },
+          );
+        }
+        const doc = await pdfjs.getDocument({ url: fileUrl }).promise;
+        const pdfPage = await doc.getPage(page);
+        const viewport = pdfPage.getViewport({ scale: 1.2 });
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        setCanvasSize({ width: viewport.width, height: viewport.height });
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+        if (!cancelled) setStatus("");
+      } catch (error) {
+        if (!cancelled) {
+          setStatus(error instanceof Error ? `Não foi possível carregar o PDF: ${error.message}` : "Não foi possível carregar o PDF.");
+        }
+      }
     })();
     return () => {
       cancelled = true;
@@ -56,20 +68,30 @@ export function PdfMapper({
     return { x: x * scaleX, y: y * scaleY, width: w * scaleX, height: h * scaleY };
   }
 
-  function onMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+  function pointerPosition(e: React.PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    setDrag({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  function onMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!drag) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x2 = e.clientX - rect.left;
-    const y2 = e.clientY - rect.top;
-    const x = Math.min(drag.x, x2);
-    const y = Math.min(drag.y, y2);
-    const w = Math.abs(x2 - drag.x);
-    const h = Math.abs(y2 - drag.y);
+  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const point = pointerPosition(e);
+    setDrag({ ...point, pointerId: e.pointerId });
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const point = pointerPosition(e);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    const x = Math.min(drag.x, point.x);
+    const y = Math.min(drag.y, point.y);
+    const w = Math.abs(point.x - drag.x);
+    const h = Math.abs(point.y - drag.y);
     setDrag(null);
     if (w < 8 || h < 8) return;
     const pdf = canvasToPdf(x, y, w, h);
@@ -93,6 +115,10 @@ export function PdfMapper({
     };
     setMappings((prev) => [...prev, mapping]);
     setSelected(mapping.id);
+  }
+
+  function onPointerCancel(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (drag?.pointerId === e.pointerId) setDrag(null);
   }
 
   async function save() {
@@ -163,8 +189,9 @@ export function PdfMapper({
           <canvas
             ref={canvasRef}
             className="block max-w-full touch-none bg-white"
-            onMouseDown={onMouseDown}
-            onMouseUp={onMouseUp}
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
           />
           {mappings
             .filter((m) => m.page === page && m.mappingKind === "overlay")
@@ -203,12 +230,12 @@ export function PdfMapper({
               )),
             )}
           </Select>
-          <p className="mt-2 text-[12px] text-[#475569]">Clique e arraste sobre o PDF para posicionar. Coordenadas são salvas em pontos do PDF, não em pixels da tela.</p>
+          <p className="mt-2 text-[12px] text-[#475569]">Clique e arraste com mouse, toque ou caneta sobre o PDF para posicionar. Coordenadas são salvas em pontos do PDF, não em pixels da tela.</p>
           <div className="mt-3 flex flex-col gap-2">
             <Button type="button" onClick={() => void save()}>Salvar mapeamento</Button>
             <Button type="button" variant="secondary" onClick={() => void addRepeater()}>Criar região repetidora</Button>
           </div>
-          {status ? <p className="mt-2 text-[12px] text-[#16a34a]">{status}</p> : null}
+          {status ? <p className={`mt-2 text-[12px] ${status.startsWith("Não foi possível") ? "text-[#dc2626]" : "text-[#16a34a]"}`}>{status}</p> : null}
         </Card>
         {version.hasAcroform ? (
           <Card>

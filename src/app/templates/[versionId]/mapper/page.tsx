@@ -3,7 +3,7 @@ import { PdfMapper } from "@/features/templates/PdfMapper";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { getTemplateVersion, listMappings, listRepeaters } from "@/lib/db/repos";
-import { publicFileUrl } from "@/lib/storage";
+import { authenticatedFileUrl } from "@/lib/storage/path";
 import { notFound } from "next/navigation";
 
 export default async function MapperPage({ params }: { params: Promise<{ versionId: string }> }) {
@@ -25,7 +25,7 @@ export default async function MapperPage({ params }: { params: Promise<{ version
         version={data.version}
         initialMappings={data.mappings}
         initialRepeaters={data.repeaters}
-        fileUrl={publicFileUrl(data.version.filePath)}
+        fileUrl={authenticatedFileUrl(data.version.filePath)}
       />
     </AppShell>
   );
