@@ -16,16 +16,15 @@ function mapCode(id: string, data: FirebaseFirestore.DocumentData): ProcedureCod
     validUntil: data.validUntil ? String(data.validUntil).slice(0, 10) : null,
     version: String(data.version ?? ""),
     active: data.active !== false,
+    tableKey: (data.tableKey as string | null | undefined) ?? null,
+    tableName: (data.tableName as string | null | undefined) ?? null,
     healthInsurerId: (data.healthInsurerId as string | null) ?? null,
     defaultQuantity: parseQuantity(data.defaultQuantity),
     metadata: (data.metadata as ProcedureCode["metadata"]) ?? {},
   };
 }
 
-/**
- * Carrega somente os procedimentos necessários para os kits exibidos na guia.
- * Evita a leitura integral de `procedures` + `procedureCodes` ao abrir o editor.
- */
+/** Carrega somente os procedimentos necessários e os códigos vinculados a eles. */
 export async function listProceduresByIds(
   db: Db,
   orgId: string,
@@ -68,7 +67,7 @@ export async function listProceduresByIds(
       active: true,
       synonyms: Array.isArray(data.synonyms) ? data.synonyms.map(String) : [],
       codes: (codesByProcedure.get(snapshot.id) ?? []).sort(
-        (a, b) => a.codeSystem.localeCompare(b.codeSystem) || a.code.localeCompare(b.code),
+        (a, b) => (a.tableName ?? "").localeCompare(b.tableName ?? "", "pt-BR") || a.code.localeCompare(b.code),
       ),
     } satisfies Procedure];
   });
