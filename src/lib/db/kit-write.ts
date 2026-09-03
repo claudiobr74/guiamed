@@ -16,17 +16,24 @@ export interface TargetedKitInput {
   }>;
 }
 
+export interface SavedKitMutation {
+  id: string;
+  created: boolean;
+}
+
 export async function saveKitWithTargetedCatalog(
   db: Db,
   orgId: string,
   data: TargetedKitInput,
-): Promise<void> {
+): Promise<SavedKitMutation> {
   const ids = [...new Set(data.items.map((item) => item.procedureId).filter(Boolean))];
   const procedures = await listProceduresByIds(db, orgId, ids);
   const procedureById = new Map(procedures.map((procedure) => [procedure.id, procedure]));
   const seen = new Set<string>();
 
   const kitId = data.id ?? orgCollection(db, orgId, "kits").doc().id;
+  const kitRef = orgCollection(db, orgId, "kits").doc(kitId);
+  const previous = await kitRef.get();
   const items = data.items.map((item, index) => {
     const procedure = procedureById.get(item.procedureId);
     if (!procedure?.active) {
@@ -57,7 +64,7 @@ export async function saveKitWithTargetedCatalog(
     };
   });
 
-  await orgCollection(db, orgId, "kits").doc(kitId).set(
+  await kitRef.set(
     {
       name: data.name.trim(),
       description: data.description?.trim() || null,
@@ -68,4 +75,6 @@ export async function saveKitWithTargetedCatalog(
     },
     { merge: true },
   );
+
+  return { id: kitId, created: !previous.exists };
 }
