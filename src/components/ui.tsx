@@ -142,22 +142,24 @@ export function EmptyState({
 export function QuantityStepper({
   value,
   onChange,
+  label = "quantidade",
 }: {
   value: number;
   onChange: (next: number) => void;
+  label?: string;
 }) {
   return (
     <div className="inline-flex items-center rounded-lg border border-[#e2e8f0]">
       <button
         type="button"
         className="h-9 w-9 text-[14px] text-[#475569]"
-        aria-label="Diminuir quantidade"
+        aria-label={`Diminuir ${label}`}
         onClick={() => onChange(Math.max(1, value - 1))}
       >
         −
       </button>
       <input
-        aria-label="Quantidade"
+        aria-label={label}
         className="h-9 w-12 border-x border-[#e2e8f0] text-center text-[13px] font-semibold"
         value={value}
         onChange={(e) => {
@@ -168,7 +170,7 @@ export function QuantityStepper({
       <button
         type="button"
         className="h-9 w-9 text-[14px] text-[#475569]"
-        aria-label="Aumentar quantidade"
+        aria-label={`Aumentar ${label}`}
         onClick={() => onChange(value + 1)}
       >
         +

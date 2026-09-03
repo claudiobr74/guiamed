@@ -76,6 +76,9 @@ export function RequestEditor({
   );
   const selectedDoctor = doctors.find((d) => d.id === request.doctorId) ?? request.doctor;
   const selectedInstitution = institutions.find((i) => i.id === request.institutionId) ?? request.institution;
+  const selectedInsurerName = insurers.find((insurer) => insurer.id === request.healthInsurerId)?.name
+    ?? selectedPatient?.healthInsurerName
+    ?? "—";
   const selectedTemplate = templates.find((t) => t.id === request.templateId);
   const compatibleTemplates = useMemo(
     () => resolveTemplateSelection({ templates, institutionId: request.institutionId, healthInsurerId: request.healthInsurerId, selectedTemplateId: request.templateId }).templates,
@@ -273,7 +276,7 @@ export function RequestEditor({
                 onClick={() => setStep(index)}
                 aria-current={index === step ? "step" : undefined}
                 aria-label={`Etapa ${index + 1}: ${label}`}
-                className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                className={`flex size-6 items-center justify-center rounded-full text-[10px] font-bold ${
                   index === step ? "bg-[#1e5fa6] text-white" : index < step ? "bg-[#16a34a] text-white" : "bg-[#f1f5f9] text-[#475569]"
                 }`}
               >
@@ -332,7 +335,14 @@ export function RequestEditor({
                 <button type="button" className="text-[12px] font-semibold text-[#1e5fa6]" onClick={() => patch({ patientId: null, patient: null })}>
                   Trocar paciente
                 </button>
-                <Button variant="subtle" className="px-3 py-1.5 text-[11px]" type="button" onClick={() => setShowNewPatient((v) => !v)}>
+                <Button
+                  variant="subtle"
+                  className="px-3 py-1.5 text-[11px]"
+                  type="button"
+                  aria-expanded={showNewPatient}
+                  aria-controls="new-patient-form"
+                  onClick={() => setShowNewPatient((v) => !v)}
+                >
                   + Novo paciente
                 </Button>
               </div>
@@ -473,7 +483,12 @@ export function RequestEditor({
             {request.cids.map((cid) => (
               <span key={cid.codeSnapshot} className="flex items-center gap-2 rounded-full bg-[#eff6ff] px-3 py-1 text-[12px] text-[#1e5fa6]">
                 CID {cid.codeSnapshot} — {cid.descriptionSnapshot}
-                <button type="button" onClick={() => patch({ cids: request.cids.filter((c) => c.codeSnapshot !== cid.codeSnapshot) })}>
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded-full"
+                  aria-label={`Remover CID ${cid.codeSnapshot}`}
+                  onClick={() => patch({ cids: request.cids.filter((c) => c.codeSnapshot !== cid.codeSnapshot) })}
+                >
                   ×
                 </button>
               </span>
@@ -611,6 +626,7 @@ export function RequestEditor({
                     <td className="py-3">
                       <QuantityStepper
                         value={item.quantity}
+                        label={`quantidade de ${item.procedureName}`}
                         onChange={(qty) => {
                           const next = [...request.items];
                           next[index] = { ...item, quantity: parseQuantity(qty) };
@@ -622,6 +638,7 @@ export function RequestEditor({
                       <button
                         type="button"
                         className="text-[#dc2626]"
+                        aria-label={`Excluir procedimento ${item.procedureName}`}
                         onClick={() => patch({ items: request.items.filter((i) => i.id !== item.id) })}
                       >
                         Excluir
@@ -669,19 +686,28 @@ export function RequestEditor({
       {step === 4 ? (
         <Card>
           <h2 className="mb-4 text-[14px] font-bold">Revisão</h2>
+          <p className="mb-4 rounded-lg bg-[#eff6ff] px-3 py-2 text-[12px] text-[#1e5fa6]">
+            Confira convênio, CID, códigos e quantidades. A validação definitiva do template e do PDF será executada ao finalizar.
+          </p>
           <dl className="grid grid-cols-1 gap-3 text-[13px] md:grid-cols-2">
             <div><dt className="text-[#64748b]">Paciente</dt><dd className="font-semibold">{selectedPatient?.fullName ?? "—"}</dd></div>
             <div><dt className="text-[#64748b]">Médico</dt><dd className="font-semibold">{selectedDoctor?.name ?? "—"}</dd></div>
             <div><dt className="text-[#64748b]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Convênio</dt><dd className="font-semibold">{selectedInsurerName}</dd></div>
             <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
             <div className="md:col-span-2"><dt className="text-[#64748b]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
             <div className="md:col-span-2"><dt className="text-[#64748b]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
             <div className="md:col-span-2">
               <dt className="text-[#64748b]">Procedimentos</dt>
               <dd>
-                <ul>
+                <ul className="mt-1 space-y-2">
                   {request.items.map((i) => (
-                    <li key={i.id}>{i.procedureName} — qtd {i.quantity} — TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND}</li>
+                    <li key={i.id} className="rounded-lg border border-[#e2e8f0] px-3 py-2">
+                      <p className="font-semibold">{i.procedureName}</p>
+                      <p className="mt-1 text-[12px] text-[#475569]">
+                        Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND} • IPASGO {i.ipasgoCodeSnapshot ?? CODE_NOT_FOUND}
+                      </p>
+                    </li>
                   ))}
                 </ul>
               </dd>
@@ -778,6 +804,7 @@ function NewPatientForm({
 }) {
   return (
     <form
+      id="new-patient-form"
       className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2"
       onSubmit={async (e) => {
         e.preventDefault();
