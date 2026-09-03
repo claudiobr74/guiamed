@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GuiaMed",
-  description: "Preenchimento de guias e documentos cirúrgicos",
+  title: "LizaCare",
+  description: "Inteligência que cuida — auxiliar médico para solicitações e guias cirúrgicas",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
