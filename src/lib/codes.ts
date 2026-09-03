@@ -10,6 +10,7 @@ export interface CodeCatalogItem {
   active: boolean;
   validFrom: string | null;
   validUntil: string | null;
+  tableKey?: string | null;
 }
 
 export type CodeLookupResult =
@@ -62,16 +63,25 @@ function compareVersionsDesc(a: string, b: string): number {
   return 0;
 }
 
-/** Resolve somente vínculos explícitos; nunca substitui um sistema por outro. */
+/** Resolve somente vínculos explícitos e, quando informado, somente a Tabela TUSS escolhida. */
 export function resolveProcedureCode(
   codes: ProcedureCode[],
-  input: { procedureId: string; codeSystem: string; at?: Date; healthInsurerId?: string | null; timeZone?: string },
+  input: {
+    procedureId: string;
+    codeSystem: string;
+    at?: Date;
+    healthInsurerId?: string | null;
+    timeZone?: string;
+    tableKey?: string | null;
+  },
 ): ProcedureCode | null {
   const at = input.at ?? new Date();
   const system = input.codeSystem.toUpperCase();
+  const tableKey = input.tableKey?.trim() || null;
   const candidates = codes.filter((code) =>
     code.procedureId === input.procedureId &&
     code.codeSystem.toUpperCase() === system &&
+    (!tableKey || code.tableKey === tableKey) &&
     isCodeValidOn(code, at, input.timeZone) &&
     (code.healthInsurerId === null || code.healthInsurerId === input.healthInsurerId),
   );
@@ -105,9 +115,7 @@ export function lookupCode(
       item.code === needle &&
       isCodeValidOn(item, at),
   );
-  if (!match) {
-    return { found: false, message: CODE_NOT_FOUND };
-  }
+  if (!match) return { found: false, message: CODE_NOT_FOUND };
   return { found: true, code: match };
 }
 
@@ -129,13 +137,8 @@ export function searchCatalog(
   const q = query.trim().toLowerCase();
   if (!q) return [];
   return catalog.filter((item) => {
-    if (codeSystem && item.codeSystem.toUpperCase() !== codeSystem.toUpperCase()) {
-      return false;
-    }
+    if (codeSystem && item.codeSystem.toUpperCase() !== codeSystem.toUpperCase()) return false;
     if (!item.active) return false;
-    return (
-      item.code.toLowerCase().includes(q) ||
-      item.description.toLowerCase().includes(q)
-    );
+    return item.code.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
   });
 }
