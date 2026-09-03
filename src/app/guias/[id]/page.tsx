@@ -9,9 +9,18 @@ import { hydrateRequestDirect } from "@/lib/db/request-hydration";
 import { getTemplate, getTemplateVersion, listDoctors, listInstitutions, listInsurers, listKits, listTemplates } from "@/lib/db/repos";
 import { notFound } from "next/navigation";
 
-export default async function GuiaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function GuiaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ step?: string | string[] }>;
+}) {
   const user = await requirePageUser();
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const requestedStep = Array.isArray(query.step) ? query.step[0] : query.step;
+  const parsedStep = Number(requestedStep);
+  const initialStep = Number.isInteger(parsedStep) && parsedStep >= 0 && parsedStep <= 4 ? parsedStep : 0;
   const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
       const request = await hydrateRequestDirect(db, user.organizationId, id);
@@ -73,6 +82,7 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
           templates={data.templates}
           kits={data.kits}
           kitProcedures={data.kitProcedures}
+          initialStep={initialStep}
         />
       ) : (
         <FinalizedRequestView

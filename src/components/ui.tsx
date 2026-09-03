@@ -1,4 +1,5 @@
-import { Children, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import Link, { type LinkProps } from "next/link";
+import { Children, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Icon, type IconName } from "@/components/icons";
 
 export { Modal } from "@/components/Modal";
@@ -7,30 +8,47 @@ export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "subtle";
+
+const BUTTON_VARIANT_STYLES: Record<ButtonVariant, string> = {
+  primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#64748b]",
+  secondary: "bg-white text-[#475569] border border-[#e2e8f0] hover:bg-[#f8fafc]",
+  danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
+  ghost: "bg-transparent text-[#1e5fa6] hover:bg-[#eff6ff]",
+  subtle: "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]",
+};
+
+function buttonClassName(variant: ButtonVariant, className?: string) {
+  return cn(
+    "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition disabled:cursor-not-allowed",
+    BUTTON_VARIANT_STYLES[variant],
+    className,
+  );
+}
+
 export function Button({
   variant = "primary",
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "subtle";
+  variant?: ButtonVariant;
 }) {
-  const styles = {
-    primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#64748b]",
-    secondary: "bg-white text-[#475569] border border-[#e2e8f0] hover:bg-[#f8fafc]",
-    danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
-    ghost: "bg-transparent text-[#1e5fa6] hover:bg-[#eff6ff]",
-    subtle: "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]",
-  }[variant];
   return (
     <button
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition disabled:cursor-not-allowed",
-        styles,
-        className,
-      )}
+      className={buttonClassName(variant, className)}
       {...props}
     />
   );
+}
+
+export function ButtonLink({
+  variant = "primary",
+  className,
+  ...props
+}: LinkProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> & {
+  variant?: ButtonVariant;
+}) {
+  return <Link className={buttonClassName(variant, className)} {...props} />;
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {

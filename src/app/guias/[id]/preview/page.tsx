@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, ButtonLink, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { listGeneratedDocuments } from "@/lib/db/generated-documents";
@@ -147,17 +146,17 @@ export default async function PreviewPage({
           </Card>
 
           <div className="flex flex-col gap-2">
-            <Link href={`/guias/${id}`}>
-              <Button type="button" variant="secondary" className="w-full">
-                {isDraft ? "Voltar e editar" : "Voltar para a guia"}
-              </Button>
-            </Link>
-            {pdfUrl ? (
-              <a href={pdfUrl} download>
-                <Button type="button" className="w-full">
-                  {isDraft ? "Baixar prévia" : "Baixar PDF"}
-                </Button>
-              </a>
+            <ButtonLink href={`/guias/${id}`} variant="secondary" className="w-full">
+              {isDraft ? "Voltar e editar" : "Voltar para a guia"}
+            </ButtonLink>
+            {isDraft ? (
+              <ButtonLink href={`/guias/${id}?step=4`} className="w-full">
+                Revisar e finalizar
+              </ButtonLink>
+            ) : pdfUrl ? (
+              <ButtonLink href={pdfUrl} download className="w-full">
+                Baixar PDF
+              </ButtonLink>
             ) : null}
           </div>
         </aside>

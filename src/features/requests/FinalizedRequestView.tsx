@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { duplicateRequestAction } from "@/app/actions";
-import { Button, Card, Field, Modal, Textarea } from "@/components/ui";
+import { Button, ButtonLink, Card, Field, Modal, Textarea } from "@/components/ui";
 import { cancelRequestAction } from "@/features/requests/review-actions";
 import type { FinalizedRequestSnapshot } from "@/lib/requests/finalized-snapshot";
 import { CODE_NOT_FOUND, type DocumentTemplate, type SurgicalRequest } from "@/types/domain";
@@ -105,9 +104,7 @@ export function FinalizedRequestView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href={`/guias/${request.id}/preview`}>
-              <Button type="button">Visualizar / baixar PDF</Button>
-            </Link>
+            <ButtonLink href={`/guias/${request.id}/preview`}>Visualizar / baixar PDF</ButtonLink>
             <form action={duplicateRequestAction.bind(null, request.id)}>
               <Button type="submit" variant="secondary">Duplicar para nova versão</Button>
             </form>

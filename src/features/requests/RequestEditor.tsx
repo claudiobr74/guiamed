@@ -36,6 +36,7 @@ export function RequestEditor({
   templates,
   kits,
   kitProcedures,
+  initialStep = 0,
 }: {
   initial: SurgicalRequest;
   patients: Patient[];
@@ -45,9 +46,10 @@ export function RequestEditor({
   templates: DocumentTemplate[];
   kits: ProcedureKit[];
   kitProcedures: Procedure[];
+  initialStep?: number;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => Math.max(0, Math.min(STEPS.length - 1, Math.trunc(initialStep))));
   const [request, setRequest] = useState(initial);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
