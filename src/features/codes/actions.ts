@@ -4,6 +4,8 @@ import ExcelJS from "exceljs";
 import { requireAdmin } from "@/lib/auth/current";
 import { withOrganizationContext, orgCollection } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
+import { getExistingCodesForImportRows } from "@/lib/db/import-lookup";
+import { indexImportedProcedureCodes } from "@/lib/db/indexed-search";
 import { parseQuantity } from "@/lib/quantity";
 import { buildImportPreview } from "@/lib/import-preview";
 import {
@@ -84,7 +86,7 @@ export async function previewImportCodesDetailedAction(formData: FormData) {
   }
 
   const existing = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.listCodes(db, user.organizationId),
+    getExistingCodesForImportRows(db, user.organizationId, validated.rows),
   );
   const analysis = buildImportPreview(validated.rows, validated.issues, existing);
 
@@ -123,15 +125,17 @@ export async function importCodesDetailedAction(formData: FormData) {
     return { ok: false as const, issues: validated.issues };
   }
 
-  const result = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.insertCodesIdempotent(db, user.organizationId, user.id, {
+  const result = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const imported = await repos.insertCodesIdempotent(db, user.organizationId, user.id, {
       codeSystem: defaultSystem,
       version: version || validated.rows[0]?.version || "1",
       sourceFilename: file.name,
       sourceFormat: format,
       rows: validated.rows,
-    }),
-  );
+    });
+    await indexImportedProcedureCodes(db, user.organizationId, validated.rows);
+    return imported;
+  });
   return { ok: true as const, ...result };
 }
 
