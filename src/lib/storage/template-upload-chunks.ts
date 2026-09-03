@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { firebaseBucket, hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
+import { hasFirebaseAdminCredentials, withFirebaseBucket } from "@/lib/firebase/admin";
 
 const LOCAL_ROOT = path.join(process.cwd(), "data", "storage");
 const TEMP_PREFIX = "template-upload-chunks";
@@ -35,18 +35,20 @@ export async function putTemplateUploadChunk(
 ): Promise<string> {
   const filePath = templateUploadChunkPath(organizationId, sessionId, index);
   if (hasFirebaseAdminCredentials()) {
-    await firebaseBucket().file(filePath).save(Buffer.from(bytes), {
-      resumable: false,
-      private: true,
-      contentType: "application/octet-stream",
-      metadata: {
+    await withFirebaseBucket((bucket) =>
+      bucket.file(filePath).save(Buffer.from(bytes), {
+        resumable: false,
+        private: true,
+        contentType: "application/octet-stream",
         metadata: {
-          organizationId,
-          uploadSessionId: sessionId,
-          chunkIndex: String(index),
+          metadata: {
+            organizationId,
+            uploadSessionId: sessionId,
+            chunkIndex: String(index),
+          },
         },
-      },
-    });
+      }),
+    );
     return filePath;
   }
   if (process.env.NODE_ENV === "production") {
@@ -65,8 +67,10 @@ export async function getTemplateUploadChunk(
 ): Promise<Uint8Array> {
   const filePath = templateUploadChunkPath(organizationId, sessionId, index);
   if (hasFirebaseAdminCredentials()) {
-    const [buffer] = await firebaseBucket().file(filePath).download();
-    return new Uint8Array(buffer);
+    return withFirebaseBucket(async (bucket) => {
+      const [buffer] = await bucket.file(filePath).download();
+      return new Uint8Array(buffer);
+    });
   }
   if (process.env.NODE_ENV === "production") {
     throw new Error("Firebase Storage não está configurado para uploads privados.");
@@ -85,7 +89,9 @@ export async function deleteTemplateUploadChunks(
     Array.from({ length: count }, async (_, index) => {
       const filePath = templateUploadChunkPath(organizationId, sessionId, index);
       if (hasFirebaseAdminCredentials()) {
-        await firebaseBucket().file(filePath).delete({ ignoreNotFound: true });
+        await withFirebaseBucket((bucket) =>
+          bucket.file(filePath).delete({ ignoreNotFound: true }).then(() => undefined),
+        );
         return;
       }
       if (process.env.NODE_ENV === "production") return;
