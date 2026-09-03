@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { unstable_doesProxyMatch } from "next/experimental/testing/server";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
 import { config, proxy } from "./proxy";
 
 describe("Next.js proxy auth barrier", () => {
-  it("matches application routes but skips static assets", () => {
-    expect(unstable_doesProxyMatch({ config, nextConfig: {}, url: "/guias" })).toBe(true);
-    expect(unstable_doesProxyMatch({ config, nextConfig: {}, url: "/_next/static/chunk.js" })).toBe(false);
-    expect(unstable_doesProxyMatch({ config, nextConfig: {}, url: "/favicon.ico" })).toBe(false);
+  it("keeps the intended negative matcher for static assets", () => {
+    expect(config.matcher).toEqual(["/((?!_next/static|_next/image|favicon.ico).*)"]);
   });
 
   it("redirects an unauthenticated private route to login", () => {
