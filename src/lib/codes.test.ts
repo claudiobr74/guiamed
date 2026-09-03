@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CODE_NOT_FOUND } from "@/types/domain";
-import { lookupCode, quantityForCodes, resolveProcedureCode, type CodeCatalogItem } from "@/lib/codes";
+import { isCodeValidOn, lookupCode, quantityForCodes, resolveProcedureCode, type CodeCatalogItem } from "@/lib/codes";
 import type { ProcedureCode } from "@/types/domain";
 
 const catalog: CodeCatalogItem[] = [
@@ -82,5 +82,22 @@ describe("resolvedor determinístico de códigos", () => {
   it("usa a quantidade positiva configurada no código", () => {
     expect(quantityForCodes(linkedCodes[2])).toBe(4);
     expect(quantityForCodes()).toBe(1);
+  });
+
+  it("mantém validUntil inclusivo durante todo o dia clínico mesmo após a virada UTC", () => {
+    const oldCode = linkedCodes.find((code) => code.id === "general-old")!;
+    const instant = new Date("2026-07-01T01:30:00.000Z"); // 30/06 22:30 em São Paulo
+    expect(isCodeValidOn(oldCode, instant)).toBe(true);
+  });
+
+  it("não antecipa validFrom por causa da meia-noite UTC", () => {
+    const newCode = linkedCodes.find((code) => code.id === "general-new")!;
+    const instant = new Date("2026-07-01T01:30:00.000Z"); // ainda 30/06 em São Paulo
+    expect(isCodeValidOn(newCode, instant)).toBe(false);
+  });
+
+  it("troca para a nova vigência quando o dia clínico realmente começa", () => {
+    const instant = new Date("2026-07-01T03:30:00.000Z"); // 01/07 00:30 em São Paulo
+    expect(resolveProcedureCode(linkedCodes, { procedureId: "procedure-1", codeSystem: "TUSS", at: instant })?.id).toBe("general-new");
   });
 });
