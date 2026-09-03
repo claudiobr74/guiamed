@@ -4,7 +4,8 @@ import { RequestEditor } from "@/features/requests/RequestEditor";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { listProceduresByIds } from "@/lib/db/procedure-lookup";
-import { hydrateRequest, listDoctors, listInstitutions, listInsurers, listKits, listTemplates } from "@/lib/db/repos";
+import { hydrateRequestDirect } from "@/lib/db/request-hydration";
+import { getTemplate, getTemplateVersion, listDoctors, listInstitutions, listInsurers, listKits, listTemplates } from "@/lib/db/repos";
 import { notFound } from "next/navigation";
 
 export default async function GuiaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,8 +13,26 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
-      const [request, doctors, institutions, insurers, templates, kits] = await Promise.all([
-        hydrateRequest(db, user.organizationId, id),
+      const request = await hydrateRequestDirect(db, user.organizationId, id);
+
+      if (request.status !== "draft") {
+        const [template, version] = await Promise.all([
+          request.templateId ? getTemplate(db, user.organizationId, request.templateId) : Promise.resolve(null),
+          request.templateVersionId ? getTemplateVersion(db, user.organizationId, request.templateVersionId) : Promise.resolve(null),
+        ]);
+        return {
+          request,
+          doctors: [],
+          institutions: [],
+          insurers: [],
+          templates: [],
+          kits: [],
+          kitProcedures: [],
+          selectedTemplate: template ? { ...template, currentVersion: version } : null,
+        };
+      }
+
+      const [doctors, institutions, insurers, templates, kits] = await Promise.all([
         listDoctors(db, user.organizationId),
         listInstitutions(db, user.organizationId),
         listInsurers(db, user.organizationId),
@@ -30,14 +49,13 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
         templates,
         kits,
         kitProcedures,
+        selectedTemplate: templates.find((template) => template.id === request.templateId) ?? null,
       };
     } catch {
       return null;
     }
   });
   if (!data) notFound();
-
-  const selectedTemplate = data.templates.find((template) => template.id === data.request.templateId) ?? null;
 
   return (
     <AppShell user={user} title={data.request.status === "draft" ? "Nova solicitação cirúrgica" : "Guia cirúrgica"}>
@@ -53,7 +71,7 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
           kitProcedures={data.kitProcedures}
         />
       ) : (
-        <FinalizedRequestView request={data.request} template={selectedTemplate} />
+        <FinalizedRequestView request={data.request} template={data.selectedTemplate} />
       )}
     </AppShell>
   );

@@ -3,7 +3,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { hydrateRequest, listGenerated } from "@/lib/db/repos";
+import { hydrateRequestDirect } from "@/lib/db/request-hydration";
+import { listGenerated } from "@/lib/db/repos";
 import { authenticatedFileUrl } from "@/lib/storage/path";
 import { notFound } from "next/navigation";
 import { CODE_NOT_FOUND } from "@/types/domain";
@@ -21,7 +22,7 @@ export default async function PreviewPage({
   const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
       return {
-        request: await hydrateRequest(db, user.organizationId, id),
+        request: await hydrateRequestDirect(db, user.organizationId, id),
         docs: await listGenerated(db, user.organizationId, id),
       };
     } catch {
