@@ -6,9 +6,10 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Head funcional validado: `38ce052` (`fix: harden PDF mapper loading and pointer input`).
+- Head funcional validado: `107d42d` (`ci: make skipped E2E status explicit`).
 - CI do head: lint PASS; typecheck PASS; testes PASS; build PASS.
 - Deploy Vercel do head: SUCCESS.
+- E2E de navegador: infraestrutura pronta, mas `browser-flow` está explicitamente SKIPPED enquanto os secrets do Firebase de teste não estiverem configurados. Não considerar isso um E2E PASS.
 
 ## Concluído no fluxo crítico
 
@@ -25,7 +26,8 @@ Atualizado em: 2026-09-02
 - duplicados/inválidos bloqueiam importação; conflitos exigem revisão mas não são tratados como erro estrutural;
 - gerenciador administrativo de vínculos TUSS/IPASGO implementado;
 - vínculo pode ser geral ou específico por convênio;
-- quantidade padrão editável por código.
+- quantidade padrão editável por código;
+- tela administrativa de tabelas deixou de carregar o catálogo inteiro: paginação server-side por cursor com 100 códigos por página e leitura de no máximo 101 documentos por avanço.
 
 ### Kits
 
@@ -72,21 +74,34 @@ Atualizado em: 2026-09-02
 - PDF.js não depende mais do worker hospedado no `unpkg`; worker é resolvido localmente pelo bundle;
 - mapper usa Pointer Events e funciona com mouse, toque e caneta.
 
+### E2E autenticado
+
+- `scripts/e2e-seed.mjs` cria tenant Firebase isolado e determinístico, sem bypass de autenticação;
+- seed cria usuário Firebase real, perfil, paciente, médico, convênio, instituição, procedimento, TUSS, IPASGO, kit e template PDF mínimo;
+- `scripts/e2e-flow.cjs` percorre login → paciente → instituição/convênio → CID-10 → kit → quantidade → justificativa → revisão → confirmação médica → finalização → PDF;
+- runner verifica que o PDF final responde 200 como `application/pdf` com sessão autenticada;
+- runner verifica que a mesma rota retorna 401 sem sessão;
+- workflow `.github/workflows/e2e.yml` usa um projeto Firebase de teste por secrets e não toca credenciais pessoais;
+- quando os secrets não existem, `browser-flow` aparece como SKIPPED, não como falso PASS;
+- execução manual sem secrets falha explicitamente.
+
 ## Próxima tarefa exata
 
-Fechar a validação E2E autenticada em ambiente controlado sem criar bypass de autenticação em produção. Depois, atacar escalabilidade de busca/paginação e debounce das buscas clínicas/administrativas.
+1. Configurar os seis secrets do Firebase de teste e obter o primeiro E2E de navegador realmente executado: `E2E_FIREBASE_SERVICE_ACCOUNT`, `E2E_FIREBASE_API_KEY`, `E2E_FIRESTORE_DATABASE_ID`, `E2E_FIREBASE_STORAGE_BUCKET`, `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
+2. Continuar a escalabilidade: paginação/busca server-side nas demais telas e debounce/cancelamento das buscas de paciente, CID e procedimentos.
 
 ## Pendências
 
 ### P0
 
-- E2E de navegador autenticado do fluxo completo: login → paciente → CID → procedimentos/kit → justificativa → preview → finalização/PDF.
+- executar e estabilizar o `browser-flow` E2E autenticado com os secrets de um Firebase de teste. A infraestrutura está pronta; falta o ambiente externo de teste.
 
 ### P1
 
 - estratégia de fonte Unicode embarcada para caracteres fora de WinAnsi sem corromper dados clínicos;
 - ampliar suporte AcroForm além de text fields quando o formulário real exigir checkbox/radio/dropdown;
-- paginação server-side e busca indexada para catálogos grandes;
+- expandir paginação server-side para telas que ainda carregam coleções completas;
+- busca indexada para catálogos grandes;
 - debounce/cancelamento de buscas de paciente, CID e procedimentos;
 - upload robusto com limites explícitos, hash verificado e rate limiting;
 - validar política de overflow por template para casos com mais procedimentos que a capacidade do formulário.
@@ -96,11 +111,15 @@ Fechar a validação E2E autenticada em ambiente controlado sem criar bypass de 
 - refinamentos responsivos e acessibilidade após estabilização do fluxo crítico;
 - migração do `middleware` para `proxy` após validar comportamento no Next.js 16.
 
-## Commits desta rodada
+## Commits relevantes desta sequência
 
 - `3b80e34` — gerenciador de vínculos e preview detalhado de importação;
 - `6e96dcc` — editor explícito de kits;
 - `caa774e` — preview finalizado por rota autenticada;
 - `3e27e58` — teste integrado do fluxo clínico;
 - `d41f445` — métricas reais e alinhamento do PDF;
-- `38ce052` — mapper autenticado, worker local e Pointer Events.
+- `38ce052` — mapper autenticado, worker local e Pointer Events;
+- `f6fe8c5` — seed Firebase determinístico para E2E;
+- `9203366` / `13f32a2` — runner do fluxo E2E autenticado e ajuste de lint;
+- `121a79f` / `107d42d` — workflow E2E e status SKIPPED explícito quando não configurado;
+- `71ee2c0` / `06c6f9a` — paginação server-side do catálogo TUSS/IPASGO.
