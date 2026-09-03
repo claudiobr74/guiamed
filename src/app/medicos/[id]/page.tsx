@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, Field, Input } from "@/components/ui";
+import { saveDoctorAction } from "@/features/doctors/profile-actions";
 import { SignatureUploader } from "@/features/doctors/SignatureUploader";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { getDoctor } from "@/lib/db/repos";
-import { saveDoctorAction } from "@/app/actions";
 import { notFound } from "next/navigation";
 
 export default async function MedicoPerfilPage({ params }: { params: Promise<{ id: string }> }) {
