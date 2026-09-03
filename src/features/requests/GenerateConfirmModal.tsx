@@ -8,17 +8,6 @@ import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
 import { reviewRequestAction } from "@/features/requests/review-actions";
 import type { FinalizationIssue } from "@/lib/requests/finalization-validation";
 
-function ageFromBirthDate(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const birth = new Date(iso);
-  if (Number.isNaN(birth.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const month = now.getMonth() - birth.getMonth();
-  if (month < 0 || (month === 0 && now.getDate() < birth.getDate())) age -= 1;
-  return age;
-}
-
 export function GenerateConfirmModal({
   open,
   request,
@@ -44,31 +33,32 @@ export function GenerateConfirmModal({
   const [issues, setIssues] = useState<FinalizationIssue[]>([]);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const age = ageFromBirthDate(patient?.birthDate);
 
   useEffect(() => {
-    if (!open) {
-      setReviewed(false);
-      return;
-    }
+    if (!open) return;
     let cancelled = false;
-    setValidating(true);
-    setValidationError(null);
-    setIssues([]);
-    void reviewRequestAction(request.id)
-      .then((result) => {
-        if (!cancelled) setIssues(result);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setValidationError(error instanceof Error ? error.message : "Não foi possível validar a guia.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setValidating(false);
-      });
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setReviewed(false);
+      setValidating(true);
+      setValidationError(null);
+      setIssues([]);
+      void reviewRequestAction(request.id)
+        .then((result) => {
+          if (!cancelled) setIssues(result);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setValidationError(error instanceof Error ? error.message : "Não foi possível validar a guia.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setValidating(false);
+        });
+    }, 0);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [open, request.id, request.revision]);
 
@@ -159,8 +149,6 @@ export function GenerateConfirmModal({
             {busy ? "Gerando..." : validating ? "Validando..." : "Gerar PDF definitivo"}
           </Button>
         </div>
-
-        {age !== null ? <p className="sr-only">Idade calculada do paciente: {age} anos.</p> : null}
       </div>
     </Modal>
   );
