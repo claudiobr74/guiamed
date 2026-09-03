@@ -186,11 +186,17 @@ export async function saveProcedureCodeLinkAction(data: {
     if (data.procedureId) {
       const procedureSnap = await orgCollection(db, user.organizationId, "procedures").doc(data.procedureId).get();
       if (!procedureSnap.exists) throw new Error("Procedimento canônico não encontrado nesta organização.");
+      if (procedureSnap.data()?.active === false) {
+        throw new Error("Procedimento canônico inativo não pode receber novos vínculos.");
+      }
     }
 
     if (data.healthInsurerId) {
       const insurerSnap = await orgCollection(db, user.organizationId, "healthInsurers").doc(data.healthInsurerId).get();
       if (!insurerSnap.exists) throw new Error("Convênio/operadora não encontrado nesta organização.");
+      if (insurerSnap.data()?.active === false) {
+        throw new Error("Convênio/operadora inativo não pode receber novos vínculos.");
+      }
     }
 
     await codeRef.set(
