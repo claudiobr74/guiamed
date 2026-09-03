@@ -1,52 +1,20 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { loginAction } from "@/app/auth-actions";
+import { Logo } from "@/components/Logo";
 import { Button, Field, Input } from "@/components/ui";
 import { Icon } from "@/components/icons";
-
-const LOGO_SOURCE_SIZE = 1536;
-const LOGO_BOUNDS = {
-  x: 241,
-  y: 581,
-  width: 1134,
-  height: 371,
-} as const;
-const LOGIN_LOGO_SRC = "/brand/lizacare-logo-login-v2.webp";
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [state, action, pending] = useActionState(loginAction, null);
-  const visibleWidth = 300;
-  const scale = visibleWidth / LOGO_BOUNDS.width;
-  const visibleHeight = LOGO_BOUNDS.height * scale;
-  const sourceRenderedSize = LOGO_SOURCE_SIZE * scale;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#f1f5f9] px-4">
       <form action={action} className="flex w-full max-w-[380px] flex-col items-center gap-6">
-        <div
-          className="relative block shrink-0 overflow-hidden"
-          style={{ width: visibleWidth, height: visibleHeight }}
-        >
-          <Image
-            src={LOGIN_LOGO_SRC}
-            alt="LizaCare — Inteligência que cuida"
-            width={LOGO_SOURCE_SIZE}
-            height={LOGO_SOURCE_SIZE}
-            unoptimized
-            priority
-            className="absolute max-w-none"
-            style={{
-              width: sourceRenderedSize,
-              height: sourceRenderedSize,
-              left: -LOGO_BOUNDS.x * scale,
-              top: -LOGO_BOUNDS.y * scale,
-            }}
-          />
-        </div>
+        <Logo size="lg" />
         <div className="w-full rounded-xl border border-[#e2e8f0] bg-white p-8">
           <h1 className="text-[18px] font-bold text-[#0f172a]">Acessar plataforma</h1>
           <p className="mt-1 text-[13px] text-[#475569]">Preencha seus dados para continuar</p>
