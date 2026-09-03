@@ -14,6 +14,7 @@ const LOGO_BOUNDS = {
   width: 1134,
   height: 371,
 } as const;
+const LOGIN_LOGO_SRC = "/brand/lizacare-logo-login-v2.webp";
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,10 +30,9 @@ export function LoginForm() {
         <div
           className="relative block shrink-0 overflow-hidden"
           style={{ width: visibleWidth, height: visibleHeight }}
-          aria-label="LizaCare — Inteligência que cuida"
         >
           <Image
-            src="/brand/lizacare-logo.webp"
+            src={LOGIN_LOGO_SRC}
             alt="LizaCare — Inteligência que cuida"
             width={LOGO_SOURCE_SIZE}
             height={LOGO_SOURCE_SIZE}
