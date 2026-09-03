@@ -5,8 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
+import { dashboardStatsAggregated } from "@/lib/db/dashboard-stats";
 import { listRequestPage } from "@/lib/db/request-page";
-import { dashboardStats, listKits } from "@/lib/db/repos";
+import { listKits } from "@/lib/db/repos";
 import { createRequestAction } from "@/app/actions";
 
 function statusTone(status: string) {
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
   const user = await requirePageUser();
   const { stats, recent, kits } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     const [stats, requestPage, kits] = await Promise.all([
-      dashboardStats(db, user.organizationId),
+      dashboardStatsAggregated(db, user.organizationId),
       listRequestPage(db, user.organizationId, { limit: 8 }),
       listKits(db, user.organizationId),
     ]);
