@@ -1,24 +1,40 @@
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { listRequests } from "@/lib/db/repos";
+import { listRequestPage } from "@/lib/db/request-page";
 import { createRequestAction, duplicateRequestAction } from "@/app/actions";
-import Link from "next/link";
+
+function pageHref(input: { q?: string; status?: string; cursor?: string | null }) {
+  const params = new URLSearchParams();
+  if (input.q) params.set("q", input.q);
+  if (input.status) params.set("status", input.status);
+  if (input.cursor) params.set("cursor", input.cursor);
+  const query = params.toString();
+  return query ? `/guias?${query}` : "/guias";
+}
 
 export default async function GuiasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; cursor?: string }>;
 }) {
   const user = await requirePageUser();
   const params = await searchParams;
-  const requests = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    listRequests(db, user.organizationId, {
+  const status = params.status === "draft" || params.status === "finalized" || params.status === "cancelled"
+    ? params.status
+    : undefined;
+  const page = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    listRequestPage(db, user.organizationId, {
       q: params.q,
-      status: params.status === "draft" || params.status === "finalized" || params.status === "cancelled" ? params.status : undefined,
+      status,
+      cursor: params.cursor,
+      limit: 50,
     }),
   );
+  const requests = page.items;
+
   return (
     <AppShell
       user={user}
@@ -38,16 +54,28 @@ export default async function GuiasPage({
           <option value="cancelled">Cancelada</option>
         </select>
         <Button type="submit" variant="secondary">Filtrar</Button>
+        {(params.q || params.status || params.cursor) ? (
+          <Link href="/guias" className="self-center text-[12px] font-semibold text-[#64748b]">Limpar</Link>
+        ) : null}
       </form>
+
+      {page.scanLimitReached ? (
+        <p className="mb-4 rounded-lg bg-[#fff7ed] px-3 py-2 text-[12px] text-[#b45309]">
+          A busca atingiu o limite seguro de leitura desta página. Refine o texto/filtro ou avance para continuar procurando.
+        </p>
+      ) : null}
+
       {requests.length === 0 ? (
         <EmptyState
-          title="Nenhuma guia criada ainda"
-          description="Crie sua primeira guia para preencher formulários cirúrgicos de forma totalmente automática."
+          title="Nenhuma guia encontrada"
+          description={params.q || params.status ? "Nenhuma guia corresponde aos filtros atuais." : "Crie sua primeira guia para preencher formulários cirúrgicos de forma totalmente automática."}
           icon="empty-document"
           action={
-            <form action={createRequestAction}>
-              <Button type="submit">Criar primeira guia</Button>
-            </form>
+            !params.q && !params.status ? (
+              <form action={createRequestAction}>
+                <Button type="submit">Criar primeira guia</Button>
+              </form>
+            ) : undefined
           }
         />
       ) : (
@@ -88,6 +116,16 @@ export default async function GuiasPage({
               ))}
             </tbody>
           </table>
+          {page.nextCursor ? (
+            <div className="flex justify-end border-t border-[#e2e8f0] p-4">
+              <Link
+                href={pageHref({ q: params.q, status: params.status, cursor: page.nextCursor })}
+                className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
+              >
+                Próximas 50
+              </Link>
+            </div>
+          ) : null}
         </div>
       )}
     </AppShell>
