@@ -22,7 +22,10 @@ export async function parseCodeImportBytes(
 
   if (name.endsWith(".xlsx")) {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(Buffer.from(bytes));
+    const workbookBytes = bytes.buffer instanceof ArrayBuffer
+      ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      : Uint8Array.from(bytes).buffer;
+    await workbook.xlsx.load(workbookBytes);
     if (workbook.worksheets.length === 0) throw new Error("Planilha vazia.");
     let best: ImportRow[] = [];
     for (const sheet of workbook.worksheets) {
