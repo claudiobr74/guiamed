@@ -4,3 +4,5 @@ export function maskCpfForList(cpf: string | null | undefined): string {
   if (digits.length !== 11) return "CPF protegido";
   return `***.***.***-${digits.slice(-2)}`;
 }
+
+export const maskCpf = maskCpfForList;
