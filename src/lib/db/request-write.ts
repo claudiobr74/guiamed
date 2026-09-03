@@ -19,7 +19,9 @@ export async function saveDraftWithTargetedCatalog(
   revision: number;
   items: SurgicalRequest["items"];
 }> {
-  const procedureIds = request.items.map((item) => item.procedureId).filter(Boolean);
+  const procedureIds = request.items
+    .map((item) => item.procedureId)
+    .filter((procedureId): procedureId is string => Boolean(procedureId));
   const procedures = await listProceduresByIds(db, user.organizationId, procedureIds);
   const codes = procedures.flatMap((procedure) => procedure.codes);
   const items = materializeRequestItems({
