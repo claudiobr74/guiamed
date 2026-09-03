@@ -6,12 +6,12 @@ Atualizado em: 2026-09-03
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último head funcional validado: `274773c1f593a104eb5a9842515c23a5ec16edde`.
-- GitHub Actions CI #97: **SUCCESS** — install PASS, lint PASS, typecheck PASS, Vitest **119/119 PASS em 26 arquivos**, build Next.js 16.3.4/Turbopack PASS.
-- O CI também publica o artifact `pdf-fixtures-2` com quatro PDFs 100% sintéticos e `manifest.json`; o artifact do CI #97 foi inspecionado visualmente após renderização a 160 dpi.
-- Vercel do head atual não chegou a executar o build por **build-rate-limit da conta**. O build equivalente no GitHub Actions está PASS; não tratar o status Vercel atual como regressão de código. O checkpoint anterior de Kits (`b5d6dbd`) teve Vercel SUCCESS.
-- E2E autenticado #80: configuração PASS, mas `browser-flow` **SKIPPED** porque os seis secrets `E2E_*` ainda não estão configurados. Não considerar E2E PASS.
-- `main` permanece intocado; PR #2 continua aberto contra `cursor/guiamed-app-e951`.
+- Último head funcional validado: `59f085a0710c45a8042092c0a5a1f9bd9c5f5746`.
+- GitHub Actions CI #115: **SUCCESS** — install PASS, lint PASS, typecheck PASS, Vitest **121/121 PASS em 27 arquivos**, publicação das fixtures PASS e build Next.js 16.3.4/Turbopack PASS.
+- Artifact do CI #115: `pdf-fixtures-2`, ID `9902879548`, com quatro PDFs 100% sintéticos + `manifest.json`.
+- Vercel do mesmo head: **SUCCESS**. O preview foi criado; a conexão Vercel disponível nesta sessão não conseguiu abrir diretamente o projeto/preview, portanto não registrar inspeção visual hospedada como concluída.
+- E2E autenticado #98: configuração PASS, mas `browser-flow` **SKIPPED** porque os seis secrets `E2E_*` ainda não estão configurados. Não considerar E2E PASS.
+- `main` permanece intocado; PR #2 continua aberto, em draft, contra `cursor/guiamed-app-e951`.
 
 ## Concluído no fluxo crítico
 
@@ -20,130 +20,107 @@ Atualizado em: 2026-09-03
 - resolvedor determinístico TUSS/IPASGO por procedimento, sistema, vigência, versão e convênio;
 - quantidade padrão por código e por kit, sempre editável e podendo ser >1;
 - materialização server-side dos itens e rejeição de snapshots/códigos adulterados;
-- CID-10 oficial com normalização do snapshot, busca e warnings informativos de restrição/exclusão;
+- CID-10 oficial com normalização do snapshot, busca e warnings informativos;
 - autosave serializado por revisão monotônica, sem sobrescrita por resposta atrasada;
 - template compatível com instituição/convênio e invalidação automática quando o contexto muda;
-- checklist final ligado à validação server-side real;
+- checklist final ligado à validação server-side;
 - finalização transacional com confirmação médica, usuário, timestamp, revisão, hash e snapshot histórico;
-- guia finalizada em modo realmente somente leitura;
-- duplicação cria nova guia editável sem alterar o original;
-- cancelamento exige motivo e gera auditoria sem apagar o PDF histórico;
-- abertura/preview/renderização de uma guia hidratam paciente, médico, instituição e convênio diretamente pelos IDs, sem scans de coleções;
+- guia finalizada realmente read-only;
+- duplicação segura e cancelamento com motivo/auditoria;
+- abertura, preview e renderização hidratam paciente, médico, instituição e convênio diretamente pelos IDs, sem scans de coleções;
 - guia finalizada não carrega catálogos administrativos que não podem ser editados.
 
-### Pacientes, médicos e organização
+### Administração, auditoria e Firestore
 
-- lista de pacientes paginada server-side em lotes de até 50, com convênios hidratados em lote e CPF mascarado;
-- cadastro e edição completa de paciente: nome, nascimento, sexo, CPF validado, telefone, e-mail, carteirinha e convênio;
-- edição do paciente não altera snapshots de guias finalizadas;
-- validação/normalização runtime com Zod para paciente, médico, instituição, convênio e procedimento;
-- assinatura médica por PNG/JPEG no Storage privado, com limite, MIME/assinatura binária, dimensões, rate limit, preview, substituição/remoção e auditoria;
-- salvar perfil do médico preserva assinatura já existente;
-- Configurações permitem editar nome da organização, CNPJ, telefone, e-mail e endereço, com validação e audit log.
+- pacientes e guias paginados/batch-hydrated;
+- médicos paginados em 50 por página;
+- instituições e convênios paginados independentemente em 50 por página;
+- procedimentos canônicos paginados em 50, lendo códigos apenas dos itens visíveis;
+- vínculos TUSS/IPASGO hidratam apenas relações atuais e pesquisam novas relações sob demanda;
+- servidor rejeita novos vínculos com procedimento/operadora inativos;
+- kits paginados em 20 e editor pesquisa procedimentos sob demanda;
+- templates paginados em 20 e versões históricas são consultadas apenas dos itens visíveis;
+- upload de template pesquisa instituição/operadora sob demanda e rejeita associação a registro inativo;
+- catálogo TUSS/IPASGO paginado; importação CSV/XLSX/JSON usa preview, chunks e indexação;
+- dashboard lê somente seis kits, em vez da coleção completa, e o rótulo foi corrigido de “Kits mais utilizados” para “Kits disponíveis”.
 
-### Administração e performance Firestore
+Audit logs administrativos agora cobrem:
 
-- instituições e convênios podem ser criados, editados e ativados/desativados;
-- médicos paginados server-side em lotes de 50, em ordem alfabética;
-- instituições e convênios paginados independentemente, 50 por página, sem `offset`;
-- procedimentos canônicos paginados server-side em lotes de 50; códigos são lidos somente para os procedimentos visíveis;
-- procedimentos canônicos podem ser editados com nome, descrição, especialidade, categoria, sinônimos e status;
-- gerenciador de vínculos TUSS/IPASGO não carrega mais todos os procedimentos/convênios: relações atuais são hidratadas por ID e novas escolhas são pesquisadas sob demanda;
-- vínculo direto no servidor rejeita procedimento ou operadora inativos, mesmo que a UI seja contornada;
-- kits paginados em lotes de 20; somente procedimentos referenciados pelos kits visíveis/selecionados são carregados;
-- editor de kits pesquisa novos procedimentos sob demanda, preservando código de referência, quantidade padrão editável e observações;
-- templates paginados em lotes de 20; versões históricas são consultadas apenas para os templates visíveis;
-- formulário de upload de template busca instituição/operadora sob demanda, sem scans globais na abertura;
-- importação TUSS/IPASGO em chunks, preview de conflitos/duplicados/inválidos, CSV/XLSX/JSON e indexação;
-- catálogo TUSS/IPASGO administrativo paginado server-side;
-- lista `/guias` usa paginação por cursor, leitura em lotes e hidratação em batch das referências, evitando N+1 por solicitação.
+- importação TUSS/IPASGO, com lote/sistema/versão/arquivo e contagens;
+- alteração de vínculo TUSS/IPASGO com estado `before/after`;
+- criação/edição de kits;
+- criação/edição de instituições;
+- criação/edição de convênios/operadoras;
+- criação/edição de procedimentos canônicos;
+- criação/edição de médicos, incluindo troca do médico padrão, sem duplicar telefone/e-mail no metadata de auditoria;
+- upload/versionamento de templates;
+- alteração de repeaters do Template Studio;
+- configurações da organização com `before/after` e campos alterados;
+- upload/remoção de assinatura médica, já auditados anteriormente.
+
+**Buraco conhecido:** alterações de `mappings` do PDF ainda usam a action legada `saveMappingsAction` de `src/app/actions.ts` e ainda precisam ser migradas para a trilha auditada.
 
 ### PDF / Template Studio
 
-- upload de PDF com validação antes de `arrayBuffer`, assinatura PDF, tamanho, páginas, estrutura e rate limit;
-- Storage privado e leitura por rota autenticada com sessão, tenant e vínculo;
-- PDF.js com worker local e Pointer Events para mouse, toque e caneta;
+- upload validado antes de `arrayBuffer`, assinatura PDF, tamanho, páginas, estrutura e rate limit;
+- Storage privado e rota autenticada com sessão/tenant/vínculo;
+- PDF.js com worker local e Pointer Events;
 - mappings editáveis com posição, tamanho, página, fonte, alinhamento, multiline, auto-shrink, required e maxCharacters;
-- repeaters editáveis com página, linhas, altura e colunas de procedimento/TUSS/IPASGO/quantidade/lateralidade/observações;
-- validação Zod server-side de mappings e repeaters;
-- métricas reais de texto, wrap e auto-shrink sem truncamento silencioso;
-- overflow horizontal/vertical/maxCharacters bloqueia geração explicitamente;
-- múltiplos repeaters funcionam como continuação sequencial;
-- AcroForm tipado para TextField, checkbox, radio, dropdown e option list, sem fallback silencioso;
-- `@pdf-lib/fontkit` + Liberation Sans embarcada permitem Unicode real em overlay e AcroForm;
-- caracteres realmente ausentes da fonte continuam bloqueados explicitamente, sem transliteração ou `.notdef` silencioso;
-- testes Unicode cobrem acentos, apóstrofo tipográfico, travessão e símbolo `≥`.
+- repeaters editáveis e validados;
+- métricas reais de texto, wrap e auto-shrink;
+- overflow horizontal/vertical/maxCharacters bloqueia geração sem truncamento silencioso;
+- múltiplos repeaters como continuação sequencial;
+- AcroForm tipado para TextField, checkbox, radio, dropdown e option list;
+- `@pdf-lib/fontkit` + Liberation Sans embarcada para Unicode real em overlay e AcroForm;
+- glifos realmente ausentes continuam bloqueados explicitamente.
 
-### Fixtures PDF sintéticas e inspeção visual
+### Fixtures PDF sintéticas
 
-O CI gera e publica quatro fixtures sem qualquer dado real de paciente:
+O CI gera quatro PDFs sem dados reais de paciente:
 
 1. `01-overlay-unicode.pdf` — overlay Unicode, alinhamento, multiline e CID;
 2. `02-acroform-controls.pdf` — TextField Unicode, checkbox, radio e dropdown;
-3. `03-signature-image.pdf` — PNG de assinatura totalmente sintética dentro da área mapeada;
-4. `04-multipage-repeaters.pdf` — 7 procedimentos, com 5 linhas na página 1 e 2 linhas na página 2.
+3. `03-signature-image.pdf` — assinatura PNG totalmente sintética;
+4. `04-multipage-repeaters.pdf` — 7 procedimentos, distribuídos em 5 + 2 linhas.
 
-Inspeção do artifact do CI #97 após renderização a 160 dpi: **sem clipping, sem sobreposição, sem quadrados/glifos quebrados; AcroForm visualmente correto; assinatura contida; continuação multipágina correta**.
+A inspeção visual inicial das fixtures a 160 dpi confirmou ausência de clipping/sobreposição/glifos quebrados, controles AcroForm coerentes, assinatura contida e continuação multipágina correta. O CI continua publicando essas fixtures como artifact a cada execução.
 
-### E2E implementado
+### Segurança HTTP
 
-`scripts/e2e-flow.cjs` cobre no código:
-
-1. autenticação Firebase real;
-2. criação de médico e paciente sintéticos;
-3. nova guia;
-4. instituição/convênio/template;
-5. CID oficial;
-6. busca manual de procedimento;
-7. TUSS/IPASGO e quantidade;
-8. justificativa;
-9. preview temporário sem finalizar;
-10. checklist e confirmação médica;
-11. PDF final autenticado;
-12. rejeição do mesmo PDF sem sessão;
-13. read-only do original;
-14. duplicação;
-15. edição da cópia e verificação de que o original não mudou.
-
-A infraestrutura está pronta, mas a evidência de navegador ainda depende dos secrets externos.
+- CSP global adicionada com `default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `form-action 'self'`, `connect-src 'self'` e `worker-src 'self' blob:`;
+- sem `unsafe-eval` e sem abertura de domínios externos no browser;
+- `unsafe-inline` mantido apenas para compatibilidade atual do runtime Next/estilos;
+- `X-Content-Type-Options: nosniff`;
+- `X-Frame-Options: DENY`;
+- Referrer-Policy, COOP, CORP, Permissions-Policy e HSTS;
+- teste dedicado `src/lib/security/headers.test.ts` protege as diretivas críticas contra regressão;
+- build e testes passaram com a política nova.
 
 ## Próxima tarefa exata
 
-1. Auditar as mutações administrativas restantes e garantir audit log consistente onde ainda faltar, começando por vínculo TUSS/IPASGO e importações.
-2. Validar com templates oficiais reais/anonimizados os valores de exportação específicos de checkbox/radio/dropdown e a política de overflow por formulário.
-3. Configurar os seis secrets do Firebase de teste e obter o primeiro `browser-flow` realmente executado.
-4. Depois: hardening de headers/CSP, acessibilidade/responsividade, comparação sistemática com Figma e migração `middleware` → `proxy` com teste dedicado.
+1. Fechar a auditoria dos `mappings` do PDF e revisar/remover/delegar as actions administrativas legadas duplicadas em `src/app/actions.ts`, sem reescrever o mapper de forma arriscada.
+2. Fazer auditoria de acessibilidade/responsividade nas telas de maior uso: login, dashboard, lista/editor de guias e Template Studio.
+3. Validar com templates oficiais reais/anonimizados os valores de checkbox/radio/dropdown e a política de overflow por formulário.
+4. Configurar os seis secrets Firebase de teste e executar o primeiro `browser-flow` real.
+5. Depois, migrar `middleware` → `proxy` com teste dedicado no Next.js 16 e concluir README operacional.
 
-## Pendências
+## Pendências externas
 
-### P0 externo
+- `E2E_FIREBASE_SERVICE_ACCOUNT`;
+- `E2E_FIREBASE_API_KEY`;
+- `E2E_FIRESTORE_DATABASE_ID`;
+- `E2E_FIREBASE_STORAGE_BUCKET`;
+- `E2E_USER_EMAIL`;
+- `E2E_USER_PASSWORD`;
+- PDFs oficiais reais/anonimizados autorizados para validar valores específicos de controles e overflow.
 
-- configurar `E2E_FIREBASE_SERVICE_ACCOUNT`, `E2E_FIREBASE_API_KEY`, `E2E_FIRESTORE_DATABASE_ID`, `E2E_FIREBASE_STORAGE_BUCKET`, `E2E_USER_EMAIL` e `E2E_USER_PASSWORD` para executar o navegador autenticado de verdade;
-- aguardar a liberação/cota de builds Vercel para validar o head atual também no preview hospedado.
+## Commits recentes desta fase
 
-### P1
-
-- expandir/confirmar audit logs de todas as mutações administrativas relevantes;
-- confirmar em PDFs oficiais reais regras específicas de valores de checkbox/radio/dropdown;
-- revisar política de overflow por template oficial;
-- incorporar templates oficiais anonimizados ao conjunto de regressão apenas quando houver autorização e remoção garantida de dados sensíveis.
-
-### P2
-
-- hardening adicional de headers/CSP;
-- auditoria de acessibilidade e responsividade nas resoluções-alvo;
-- comparação sistemática com Figma;
-- README operacional final;
-- migração `middleware` → `proxy` após validação específica no Next.js 16.
-
-## Commits recentes desta rodada
-
-- `d1216d0` — fonte Unicode embarcada com `fontkit` e validação explícita de glifos;
-- `612c735` — hidratação direta de referências da guia e remoção de scans em modo finalizado;
-- `fd9c283` — paginação de médicos, instituições e convênios;
-- `b5d6dbd` — Kits paginados + busca de procedimentos sob demanda; CI/Vercel PASS;
-- `58300b1` — Templates paginados + associações buscadas sob demanda;
-- `bb8d2f7` — procedimentos canônicos/vínculos paginados e relacionamentos sob demanda; CI #94 PASS;
-- `e0707aa` — rejeição server-side de vínculos com registros inativos;
-- `ab117a7` — quatro fixtures PDF sintéticas representativas;
-- `274773c` — CI publica as fixtures como artifact para inspeção visual; CI #97 PASS, 119/119 testes.
+- `274773c` — fixtures PDF publicadas no CI;
+- `ef3584c` — auditoria inicial de importação/vínculos/kits;
+- `c70e517` / `e4e0939` / `aef8a36` / `8eea833` — actions auditadas de instituições, convênios e procedimentos;
+- `10bb84d` — auditoria de upload/versionamento de template e repeaters;
+- `89c756f` / `fe5fe45` / `f983f88` — auditoria de criação/edição de médicos;
+- `19ff0a3` — auditoria enriquecida das configurações da organização; CI #112 PASS;
+- `a2e51b4` / `2c9f219` — headers/CSP e testes de segurança; CI #114 PASS;
+- `59f085a` — dashboard limitado a seis kits e rótulo factual; **CI #115 PASS, 121/121 testes, Vercel SUCCESS**.
