@@ -10,8 +10,7 @@ import {
 import { SEMANTIC_FIELDS, suggestSemanticField } from "@/lib/mapping-suggest";
 import type { AcroFormField, FieldMapping, PdfRepeater, RepeaterColumn, TemplateVersion } from "@/types/domain";
 import { Button, Card, Input, Select } from "@/components/ui";
-import { saveMappingsAction } from "@/app/actions";
-import { saveRepeatersAction } from "@/features/templates/actions";
+import { saveMappingsAction, saveRepeatersAction } from "@/features/templates/actions";
 
 const REPEATER_FIELDS: Array<RepeaterColumn["field"]> = [
   "name",
