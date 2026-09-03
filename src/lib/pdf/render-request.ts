@@ -36,8 +36,9 @@ export async function renderRequestPdf(
     request.templateVersionId,
   );
   if (!version) throw new Error("Versão do template não encontrada.");
-  const templates = await repos.listTemplates(db, user.organizationId);
-  const template = templates.find((candidate) => candidate.id === request.templateId) ?? null;
+  const template = request.templateId
+    ? await repos.getTemplate(db, user.organizationId, request.templateId)
+    : null;
   if (!template) throw new Error("Template não encontrado nesta organização.");
 
   const [mappings, repeaters] = await Promise.all([

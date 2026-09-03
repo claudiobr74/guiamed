@@ -13,8 +13,11 @@ async function canAccessFile(filePath: string, organizationId: string, role: "ad
     return !docs.empty;
   }
   if (bucket === "pdf-templates" && role === "admin") {
-    const versions = await db.collection("templateVersions").where("organizationId", "==", organizationId).get();
-    return versions.docs.some((version) => version.data().filePath === filePath);
+    const versions = await db.collection("templateVersions")
+      .where("filePath", "==", filePath)
+      .limit(1)
+      .get();
+    return versions.docs.some((version) => version.data().organizationId === organizationId);
   }
   return false;
 }

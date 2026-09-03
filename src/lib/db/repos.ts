@@ -385,20 +385,19 @@ export async function listTemplates(db: Db, orgId: string): Promise<DocumentTemp
   }
   return snap.docs
     .map((doc) => {
-      const data = doc.data();
       return {
-        id: doc.id,
-        organizationId: orgId,
-        name: String(data.name ?? ""),
-        institutionId: (data.institutionId as string | null) ?? null,
-        healthInsurerId: (data.healthInsurerId as string | null) ?? null,
-        documentType: String(data.documentType ?? "surgical_request"),
-        active: Boolean(data.active ?? true),
+        ...mapTemplateRecord(orgId, doc.id, doc.data()),
         currentVersion: byTemplate.get(doc.id) ?? null,
         versions: (versionsByTemplate.get(doc.id) ?? []).sort((a, b) => b.version - a.version),
       } satisfies DocumentTemplate;
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+export async function getTemplate(db: Db, orgId: string, id: string): Promise<DocumentTemplate | null> {
+  const snap = await orgCollection(db, orgId, "templates").doc(id).get();
+  if (!snap.exists) return null;
+  return mapTemplateRecord(orgId, snap.id, snap.data() ?? {});
 }
 
 export async function getTemplateVersion(db: Db, orgId: string, id: string): Promise<TemplateVersion | null> {
@@ -916,5 +915,17 @@ function mapVersion(id: string, data: DocumentData): TemplateVersion {
     active: Boolean(data.active),
     createdAt: String(data.createdAt ?? now()),
     createdBy: (data.createdBy as string | null) ?? null,
+  };
+}
+
+function mapTemplateRecord(orgId: string, id: string, data: DocumentData): DocumentTemplate {
+  return {
+    id,
+    organizationId: orgId,
+    name: String(data.name ?? ""),
+    institutionId: (data.institutionId as string | null) ?? null,
+    healthInsurerId: (data.healthInsurerId as string | null) ?? null,
+    documentType: String(data.documentType ?? "surgical_request"),
+    active: data.active !== false,
   };
 }
