@@ -25,4 +25,8 @@ describe("security headers", () => {
     const routes = await nextConfig.headers?.();
     expect(routes?.[0]?.source).toBe("/(.*)");
   });
+
+  it("mantém Server Actions abaixo do teto de payload da Vercel", () => {
+    expect(nextConfig.experimental?.serverActions).toMatchObject({ bodySizeLimit: "4mb" });
+  });
 });
