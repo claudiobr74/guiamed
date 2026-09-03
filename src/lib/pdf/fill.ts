@@ -1,3 +1,4 @@
+import fontkit from "@pdf-lib/fontkit";
 import {
   PDFCheckBox,
   PDFDocument,
@@ -5,7 +6,6 @@ import {
   PDFOptionList,
   PDFRadioGroup,
   PDFTextField,
-  StandardFonts,
   rgb,
   type PDFFont,
   type PDFForm,
@@ -13,6 +13,7 @@ import {
 } from "pdf-lib";
 import { OverflowError, assertProcedureOverflow, maxRowsFromRepeaters } from "@/lib/overflow";
 import { topLeftToPdfLib } from "@/lib/pdf/coords";
+import { getPdfUnicodeFontBytes } from "@/lib/pdf/unicode-font";
 import type { FieldMapping, PdfRepeater, SurgicalRequest } from "@/types/domain";
 
 export interface FillPdfInput {
@@ -66,6 +67,10 @@ export class PdfAcroFormError extends Error {
     this.pdfFieldName = pdfFieldName;
   }
 }
+
+type GlyphSupportFont = {
+  hasGlyphForCodePoint(codePoint: number): boolean;
+};
 
 function getSemanticValue(request: SurgicalRequest, semantic: string): string {
   const procedure = /^procedures\[(\d+)\]\.([a-zA-Z_]+)$/.exec(semantic);
@@ -133,6 +138,20 @@ function assertFontSupportsText(font: PDFFont, text: string, semanticField: stri
     font.encodeText(text);
   } catch {
     throw new PdfFontEncodingError(semanticField);
+  }
+}
+
+function assertUnicodeFontSupportsText(
+  font: GlyphSupportFont,
+  text: string,
+  semanticField: string,
+): void {
+  for (const character of Array.from(text)) {
+    if (character === "\n" || character === "\r" || character === "\t") continue;
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || !font.hasGlyphForCodePoint(codePoint)) {
+      throw new PdfFontEncodingError(semanticField);
+    }
   }
 }
 
@@ -406,12 +425,22 @@ export async function fillPdf(input: FillPdfInput): Promise<FillPdfResult> {
   assertProcedureOverflow(input.request.items.length, maxRows);
 
   const pdf = await PDFDocument.load(input.templateBytes);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBytes = await getPdfUnicodeFontBytes();
+  const parsedFont = fontkit.create(fontBytes) as unknown as Partial<GlyphSupportFont>;
+  if (typeof parsedFont.hasGlyphForCodePoint !== "function") {
+    throw new Error("A fonte Unicode configurada para geração de PDF é inválida.");
+  }
+  const glyphFont = parsedFont as GlyphSupportFont;
+  pdf.registerFontkit(fontkit);
+  const font = await pdf.embedFont(fontBytes, { subset: true });
   const form = pdf.getForm();
   let changedAcroForm = false;
 
   for (const mapping of input.mappings) {
     const value = getSemanticValue(input.request, mapping.semanticField);
+    if (mapping.semanticField !== "signature.image") {
+      assertUnicodeFontSupportsText(glyphFont, value, mapping.semanticField);
+    }
     if (mapping.mappingKind === "acroform" && mapping.pdfFieldName) {
       fillAcroFormField(form, font, mapping, value);
       changedAcroForm = true;
@@ -473,7 +502,9 @@ export async function fillPdf(input: FillPdfInput): Promise<FillPdfResult> {
           maxCharacters: null,
           required: false,
         };
-        drawMappedText(page, font, mapping, getSemanticValue(input.request, semantic));
+        const value = getSemanticValue(input.request, semantic);
+        assertUnicodeFontSupportsText(glyphFont, value, semantic);
+        drawMappedText(page, font, mapping, value);
       }
     });
     itemOffset += repeater.maxRows;

@@ -136,6 +136,23 @@ describe("PDF e overflow", () => {
     expect(filled.bytes.byteLength).toBeGreaterThan(0);
   });
 
+  it("embute Unicode usado em português sem transliterar o conteúdo", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = {
+      ...clinicalRequest.patient!,
+      fullName: "João D’Ávila – São José ≥ 18",
+    };
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: clinicalRequest,
+      mappings: [{ ...simpleMapping, width: 280 }],
+      repeaters: [],
+    });
+    expect(filled.bytes.byteLength).toBeGreaterThan(0);
+  });
+
   it("multiline", async () => {
     const pdf = await PDFDocument.create();
     pdf.addPage([400, 600]);
@@ -183,11 +200,11 @@ describe("PDF e overflow", () => {
     ).rejects.toThrow("A justificativa clínica excede o espaço disponível neste template.");
   });
 
-  it("retorna erro amigável para caractere fora da fonte WinAnsi", async () => {
+  it("retorna erro amigável para glifo realmente ausente da fonte Unicode", async () => {
     const pdf = await PDFDocument.create();
     pdf.addPage([400, 600]);
     const clinicalRequest = request(1);
-    clinicalRequest.patient = { ...clinicalRequest.patient!, fullName: "Paciente ≥ 18 anos" };
+    clinicalRequest.patient = { ...clinicalRequest.patient!, fullName: "Paciente 🧬" };
     await expect(
       fillPdf({
         templateBytes: await pdf.save(),
@@ -198,22 +215,24 @@ describe("PDF e overflow", () => {
     ).rejects.toBeInstanceOf(PdfFontEncodingError);
   });
 
-  it("AcroForm", async () => {
+  it("AcroForm preserva texto Unicode e atualiza a aparência com a fonte embarcada", async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([400, 600]);
     const form = pdf.getForm();
     const field = form.createTextField("patient_name");
-    field.addToPage(page, { x: 40, y: 500, width: 200, height: 16 });
+    field.addToPage(page, { x: 40, y: 500, width: 240, height: 16 });
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     form.updateFieldAppearances(font);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = { ...clinicalRequest.patient!, fullName: "João D’Ávila – ≥ 18" };
     const filled = await fillPdf({
       templateBytes: await pdf.save(),
-      request: request(1),
-      mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "patient_name" }],
+      request: clinicalRequest,
+      mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "patient_name", width: 240 }],
       repeaters: [],
     });
     const out = await PDFDocument.load(filled.bytes);
-    expect(out.getForm().getTextField("patient_name").getText()).toContain("Paciente");
+    expect(out.getForm().getTextField("patient_name").getText()).toBe("João D’Ávila – ≥ 18");
   });
 
   it("bloqueia overflow no limite nativo de um TextField AcroForm", async () => {
