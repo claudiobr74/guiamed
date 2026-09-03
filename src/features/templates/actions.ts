@@ -7,11 +7,11 @@ import { writeAuditLog } from "@/lib/db/audit";
 import { orgCollection, withOrganizationContext } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { inspectPdf } from "@/lib/pdf/inspect";
-import { validateRepeaterForTemplate } from "@/lib/pdf/mapping-validation";
+import { validateMappingsForTemplate, validateRepeaterForTemplate } from "@/lib/pdf/mapping-validation";
 import { validatePdfUploadMetadata } from "@/lib/pdf/upload-validation";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import { deleteObject, putObject } from "@/lib/storage";
-import type { PdfRepeater } from "@/types/domain";
+import type { FieldMapping, PdfRepeater } from "@/types/domain";
 
 const MIN_SEARCH_LENGTH = 2;
 
@@ -111,6 +111,34 @@ export async function uploadTemplateAndRedirectAction(formData: FormData): Promi
   }
 
   redirect(`/templates/${created.versionId}/mapper`);
+}
+
+export async function saveMappingsAction(
+  versionId: string,
+  mappings: Omit<FieldMapping, "id" | "templateVersionId">[],
+) {
+  const user = await requireAdmin();
+  await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const version = await repos.getTemplateVersion(db, user.organizationId, versionId);
+    if (!version) throw new Error("Versão do template não encontrada nesta organização.");
+    const previous = await repos.listMappings(db, user.organizationId, versionId);
+    const validated = validateMappingsForTemplate(mappings, version);
+    await repos.saveMappings(db, user.organizationId, versionId, validated);
+    await writeAuditLog(db, user.organizationId, {
+      userId: user.id,
+      action: "update_pdf_mappings",
+      entityType: "template_version",
+      entityId: versionId,
+      metadata: {
+        beforeCount: previous.length,
+        afterCount: validated.length,
+        overlayCount: validated.filter((mapping) => mapping.mappingKind === "overlay").length,
+        acroformCount: validated.filter((mapping) => mapping.mappingKind === "acroform").length,
+        requiredCount: validated.filter((mapping) => mapping.required).length,
+        semanticFields: [...new Set(validated.map((mapping) => mapping.semanticField))].sort(),
+      },
+    });
+  });
 }
 
 export async function saveRepeatersAction(
