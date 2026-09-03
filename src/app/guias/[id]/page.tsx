@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { FinalizedRequestView } from "@/features/requests/FinalizedRequestView";
 import { RequestEditor } from "@/features/requests/RequestEditor";
+import { RequestTussTablePicker } from "@/features/requests/RequestTussTablePicker";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
+import { listTussCodeTables } from "@/lib/db/code-tables";
 import { getLatestGeneratedDocument } from "@/lib/db/generated-documents";
 import { listProceduresByIds } from "@/lib/db/procedure-lookup";
 import { hydrateRequestDirect } from "@/lib/db/request-hydration";
@@ -39,17 +41,19 @@ export default async function GuiaPage({
           templates: [],
           kits: [],
           kitProcedures: [],
+          tussTables: [],
           selectedTemplate: template ? { ...template, currentVersion: version } : null,
           finalizedSnapshot: generatedDocument?.requestSnapshot ?? null,
         };
       }
 
-      const [doctors, institutions, insurers, templates, kits] = await Promise.all([
+      const [doctors, institutions, insurers, templates, kits, tussTables] = await Promise.all([
         listDoctors(db, user.organizationId),
         listInstitutions(db, user.organizationId),
         listInsurers(db, user.organizationId),
         listTemplates(db, user.organizationId),
         listKits(db, user.organizationId),
+        listTussCodeTables(db, user.organizationId),
       ]);
       const kitProcedureIds = [...new Set(kits.flatMap((kit) => kit.items.map((item) => item.procedureId)))];
       const kitProcedures = await listProceduresByIds(db, user.organizationId, kitProcedureIds);
@@ -61,6 +65,7 @@ export default async function GuiaPage({
         templates,
         kits,
         kitProcedures,
+        tussTables,
         selectedTemplate: templates.find((template) => template.id === request.templateId) ?? null,
         finalizedSnapshot: null,
       };
@@ -73,17 +78,24 @@ export default async function GuiaPage({
   return (
     <AppShell user={user} title={data.request.status === "draft" ? "Nova solicitação cirúrgica" : "Guia cirúrgica"}>
       {data.request.status === "draft" ? (
-        <RequestEditor
-          initial={data.request}
-          patients={[]}
-          doctors={data.doctors}
-          institutions={data.institutions}
-          insurers={data.insurers}
-          templates={data.templates}
-          kits={data.kits}
-          kitProcedures={data.kitProcedures}
-          initialStep={initialStep}
-        />
+        <div className="flex flex-col gap-5">
+          <RequestTussTablePicker
+            requestId={data.request.id}
+            selectedKey={data.request.tussTableKey}
+            tables={data.tussTables}
+          />
+          <RequestEditor
+            initial={data.request}
+            patients={[]}
+            doctors={data.doctors}
+            institutions={data.institutions}
+            insurers={data.insurers}
+            templates={data.templates}
+            kits={data.kits}
+            kitProcedures={data.kitProcedures}
+            initialStep={initialStep}
+          />
+        </div>
       ) : (
         <FinalizedRequestView
           request={data.request}
