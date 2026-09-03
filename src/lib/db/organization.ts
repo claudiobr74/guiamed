@@ -1,10 +1,21 @@
 import type { Db } from "@/lib/db/client";
-import { orgCollection } from "@/lib/db/client";
+import { writeAuditLog } from "@/lib/db/audit";
 import type { Organization, SessionUser } from "@/types/domain";
 import type { OrganizationSettingsInput } from "@/lib/validation/organization";
 
 function now() {
   return new Date().toISOString();
+}
+
+function settingsSnapshot(value: Organization | null) {
+  if (!value) return null;
+  return {
+    name: value.name,
+    cnpj: value.cnpj,
+    phone: value.phone,
+    email: value.email,
+    address: value.address,
+  };
 }
 
 export async function getOrganizationSettings(db: Db, orgId: string): Promise<Organization | null> {
@@ -29,6 +40,7 @@ export async function updateOrganizationSettings(
   input: OrganizationSettingsInput,
 ): Promise<Organization> {
   const ref = db.collection("organizations").doc(user.organizationId);
+  const before = await getOrganizationSettings(db, user.organizationId);
   const current = await ref.get();
   const updatedAt = now();
   await ref.set({
@@ -40,15 +52,28 @@ export async function updateOrganizationSettings(
     createdAt: current.exists ? current.data()?.createdAt ?? updatedAt : updatedAt,
     updatedAt,
   }, { merge: true });
-  await orgCollection(db, user.organizationId, "auditLogs").add({
-    userId: user.id,
-    action: "update",
-    entityType: "organization",
-    entityId: user.organizationId,
-    metadata: {},
-    createdAt: updatedAt,
-  });
+
   const saved = await getOrganizationSettings(db, user.organizationId);
   if (!saved) throw new Error("Organização não encontrada após salvar.");
+  const beforeSnapshot = settingsSnapshot(before);
+  const afterSnapshot = settingsSnapshot(saved);
+  const changedFields = afterSnapshot
+    ? Object.keys(afterSnapshot).filter((key) => {
+        const field = key as keyof typeof afterSnapshot;
+        return beforeSnapshot?.[field] !== afterSnapshot[field];
+      })
+    : [];
+
+  await writeAuditLog(db, user.organizationId, {
+    userId: user.id,
+    action: "update_organization_settings",
+    entityType: "organization",
+    entityId: user.organizationId,
+    metadata: {
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      changedFields,
+    },
+  });
   return saved;
 }
