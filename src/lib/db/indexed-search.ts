@@ -221,7 +221,7 @@ export async function searchProceduresIndexed(db: Db, orgId: string, query: stri
     (doc) => doc.data().active !== false && matchesIndexedSearch(String(doc.data().searchText ?? ""), query),
   );
 
-  const directById = new Map(directMatches.map((doc) => [doc.id, doc]));
+  const directById = new Map<string, DocumentData>(directMatches.map((doc) => [doc.id, doc.data()]));
   const codeMatchedIds = matchingCodes
     .map((doc) => String(doc.data().procedureId ?? ""))
     .filter(Boolean);
@@ -233,7 +233,8 @@ export async function searchProceduresIndexed(db: Db, orgId: string, query: stri
     const refs = missingIds.map((id) => orgCollection(db, orgId, "procedures").doc(id));
     const snapshots = await db.getAll(...refs);
     for (const snapshot of snapshots) {
-      if (snapshot.exists && snapshot.data()?.active !== false) directById.set(snapshot.id, snapshot);
+      const data = snapshot.data();
+      if (snapshot.exists && data && data.active !== false) directById.set(snapshot.id, data);
     }
   }
 
@@ -257,24 +258,24 @@ export async function searchProceduresIndexed(db: Db, orgId: string, query: stri
 
   return validIds
     .map((id) => {
-      const doc = directById.get(id)!;
+      const data = directById.get(id)!;
       return mapProcedure(
         orgId,
         id,
-        doc.data(),
+        data,
         (codesByProcedure.get(id) ?? []).sort(
           (a, b) => a.codeSystem.localeCompare(b.codeSystem) || a.code.localeCompare(b.code),
         ),
       );
     })
     .sort((a, b) => {
-      const aDoc = directById.get(a.id)!;
-      const bDoc = directById.get(b.id)!;
+      const aData = directById.get(a.id)!;
+      const bData = directById.get(b.id)!;
       const aDirect = directMatches.some((doc) => doc.id === a.id)
-        ? searchRank(a.name, String(aDoc.data().searchText ?? ""), query)
+        ? searchRank(a.name, String(aData.searchText ?? ""), query)
         : 9;
       const bDirect = directMatches.some((doc) => doc.id === b.id)
-        ? searchRank(b.name, String(bDoc.data().searchText ?? ""), query)
+        ? searchRank(b.name, String(bData.searchText ?? ""), query)
         : 9;
       const aRank = Math.min(aDirect, codeRankByProcedure.get(a.id) ?? 9);
       const bRank = Math.min(bDirect, codeRankByProcedure.get(b.id) ?? 9);
@@ -467,10 +468,11 @@ export async function rebuildSearchIndexChunk(
   };
   const completedCollection = snapshot.size < REINDEX_BATCH_SIZE;
   const next = completedCollection ? nextCollection(collection) : collection;
+  const lastDocumentId = snapshot.docs[snapshot.docs.length - 1]?.id ?? null;
   const nextState: ReindexState = {
     ...state,
     collection: next,
-    cursor: completedCollection ? null : snapshot.docs.at(-1)?.id ?? null,
+    cursor: completedCollection ? null : lastDocumentId,
     processed,
     updatedAt: now(),
   };
