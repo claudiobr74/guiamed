@@ -2,7 +2,7 @@ import type { Db } from "@/lib/db/client";
 import { normalizeRequestCids } from "@/lib/cid10/catalog";
 import { hydrateRequestDirect } from "@/lib/db/request-hydration";
 import * as repos from "@/lib/db/repos";
-import { fillPdf, validateRequestForPdf } from "@/lib/pdf/fill";
+import { fillPdf } from "@/lib/pdf/fill";
 import { getObject } from "@/lib/storage";
 import type { SessionUser } from "@/types/domain";
 import { validateRequestForFinalization } from "@/lib/requests/finalization-validation";
@@ -46,11 +46,9 @@ export async function renderRequestPdf(
     repos.listMappings(db, user.organizationId, version.id),
     repos.listRepeaters(db, user.organizationId, version.id),
   ]);
-  const errors = validateRequestForPdf(request, mappings);
   const finalizationIssues = validateRequestForFinalization({ request, template, version, mappings, repeaters });
   const blockingIssue = finalizationIssues.find((issue) => issue.severity === "error");
   if (blockingIssue) throw new Error(blockingIssue.message);
-  if (errors.length > 0) throw new Error(errors[0]);
 
   const templateBytes = await getObject(version.filePath, user.organizationId);
   let signatureBytes: Uint8Array | null = null;
