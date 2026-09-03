@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids, searchCid10 } from "@/lib/cid10/catalog";
-import { withOrganizationContext } from "@/lib/db/client";
+import { orgCollection, withOrganizationContext } from "@/lib/db/client";
 import {
   getSearchIndexStatus,
   rebuildSearchIndexChunk,
@@ -19,6 +19,7 @@ import { buildJustificationDraft, type JustificationFacts } from "@/lib/justific
 import { renderRequestPdf } from "@/lib/pdf/render-request";
 import { parseQuantity } from "@/lib/quantity";
 import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
+import { RequestChangedError } from "@/lib/requests/revision";
 import { deleteObject, putObject } from "@/lib/storage";
 import { parsePatientInput } from "@/lib/validation/domain";
 import type {
@@ -115,7 +116,24 @@ export async function generatePdfAction(requestId: string, confirmation: { accep
     throw new Error("Confirme a revisão médica antes de finalizar a guia.");
   }
   return withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const requestRef = orgCollection(db, user.organizationId, "requests").doc(requestId);
+    const reviewSnapshot = await requestRef.get();
+    if (!reviewSnapshot.exists) throw new Error("Solicitação não encontrada.");
+    const reviewData = reviewSnapshot.data() ?? {};
+    const reviewedRevision = Number(reviewData.reviewValidationRevision);
+    const currentRevision = Number(reviewData.revision ?? 0);
+    if (
+      reviewData.status !== "draft" ||
+      !Number.isInteger(reviewedRevision) ||
+      reviewedRevision !== currentRevision ||
+      reviewData.reviewValidatedBy !== user.id
+    ) {
+      throw new RequestChangedError();
+    }
+
     const rendered = await renderRequestPdf(db, user, requestId);
+    if (rendered.requestRevision !== reviewedRevision) throw new RequestChangedError();
+
     const stored = await putObject(
       "generated-documents",
       user.organizationId,
