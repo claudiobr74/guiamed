@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  authenticatedFileUrl,
   authorizedStoragePath,
   buildStoragePath,
   requireAuthorizedStoragePath,
@@ -47,5 +48,14 @@ describe("storage path", () => {
         "org-1",
       ),
     ).toThrow(/Acesso negado/);
+  });
+
+  it("gera URL interna autenticada com segmentos codificados", () => {
+    expect(
+      authenticatedFileUrl("generated-documents/org-1/guia final 01.pdf"),
+    ).toBe("/api/files/generated-documents/org-1/guia%20final%2001.pdf");
+    expect(() => authenticatedFileUrl("generated-documents/org-1/../segredo.pdf")).toThrow(
+      /Caminho de arquivo inválido/,
+    );
   });
 });

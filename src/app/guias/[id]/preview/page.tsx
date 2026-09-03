@@ -4,7 +4,7 @@ import { Button, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { hydrateRequest, listGenerated } from "@/lib/db/repos";
-import { publicFileUrl } from "@/lib/storage";
+import { authenticatedFileUrl } from "@/lib/storage/path";
 import { notFound } from "next/navigation";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
@@ -36,7 +36,7 @@ export default async function PreviewPage({
     data.request.status === "draft"
       ? `/api/guias/${encodeURIComponent(id)}/preview`
       : selectedDocument
-        ? publicFileUrl(selectedDocument.filePath)
+        ? authenticatedFileUrl(selectedDocument.filePath)
         : null;
   return (
     <AppShell user={user} title="Preview do PDF">
