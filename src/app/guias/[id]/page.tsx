@@ -2,7 +2,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { RequestEditor } from "@/features/requests/RequestEditor";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { hydrateRequest, listDoctors, listInstitutions, listInsurers, listKits, listPatients, listProcedures, listTemplates } from "@/lib/db/repos";
+import { listProceduresByIds } from "@/lib/db/procedure-lookup";
+import { hydrateRequest, listDoctors, listInstitutions, listInsurers, listKits, listTemplates } from "@/lib/db/repos";
 import { notFound } from "next/navigation";
 
 export default async function GuiaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,26 +11,24 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     try {
-      const [request, patients, doctors, institutions, insurers, templates, kits, procedures] = await Promise.all([
+      const [request, doctors, institutions, insurers, templates, kits] = await Promise.all([
         hydrateRequest(db, user.organizationId, id),
-        listPatients(db, user.organizationId),
         listDoctors(db, user.organizationId),
         listInstitutions(db, user.organizationId),
         listInsurers(db, user.organizationId),
         listTemplates(db, user.organizationId),
         listKits(db, user.organizationId),
-        listProcedures(db, user.organizationId),
       ]);
-      const kitProcedureIds = new Set(kits.flatMap((kit) => kit.items.map((item) => item.procedureId)));
+      const kitProcedureIds = [...new Set(kits.flatMap((kit) => kit.items.map((item) => item.procedureId)))];
+      const kitProcedures = await listProceduresByIds(db, user.organizationId, kitProcedureIds);
       return {
         request,
-        patients,
         doctors,
         institutions,
         insurers,
         templates,
         kits,
-        kitProcedures: procedures.filter((procedure) => kitProcedureIds.has(procedure.id)),
+        kitProcedures,
       };
     } catch {
       return null;
@@ -40,7 +39,7 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
     <AppShell user={user} title="Nova solicitação cirúrgica">
       <RequestEditor
         initial={data.request}
-        patients={data.patients}
+        patients={[]}
         doctors={data.doctors}
         institutions={data.institutions}
         insurers={data.insurers}
