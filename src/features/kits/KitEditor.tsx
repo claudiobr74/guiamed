@@ -57,15 +57,11 @@ export function KitEditor({
 
   useEffect(() => {
     const query = procedureQuery.trim();
-    if (query.length < MIN_SEARCH_LENGTH) {
-      setProcedureResults([]);
-      setSearching(false);
-      return;
-    }
+    if (query.length < MIN_SEARCH_LENGTH) return;
 
     let cancelled = false;
-    setSearching(true);
     const timer = window.setTimeout(() => {
+      if (!cancelled) setSearching(true);
       void searchProceduresAction(query)
         .then((results) => {
           if (!cancelled) setProcedureResults(results.filter((procedure) => procedure.active));
@@ -110,6 +106,7 @@ export function KitEditor({
     ]);
     setProcedureQuery("");
     setProcedureResults([]);
+    setSearching(false);
   }
 
   return (
@@ -137,7 +134,14 @@ export function KitEditor({
         <Field label="Buscar procedimento">
           <Input
             value={procedureQuery}
-            onChange={(event) => setProcedureQuery(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProcedureQuery(next);
+              if (next.trim().length < MIN_SEARCH_LENGTH) {
+                setProcedureResults([]);
+                setSearching(false);
+              }
+            }}
             placeholder="Digite ao menos 2 caracteres"
           />
         </Field>
