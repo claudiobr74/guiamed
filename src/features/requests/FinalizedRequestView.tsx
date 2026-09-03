@@ -95,7 +95,7 @@ export function FinalizedRequestView({
           />
           <Summary label="Diagnóstico" value={request.diagnosis ?? "—"} wide />
           <div className="md:col-span-2">
-            <dt className="mb-2 text-[11px] font-semibold uppercase text-[#94a3b8]">Procedimentos</dt>
+            <dt className="mb-2 text-[11px] font-semibold uppercase text-[#64748b]">Procedimentos</dt>
             <dd>
               <div className="overflow-x-auto rounded-lg border border-[#e2e8f0]">
                 <table className="w-full min-w-[680px] text-left text-[12px]">
@@ -170,7 +170,7 @@ function Summary({
 }) {
   return (
     <div className={wide ? "md:col-span-2" : undefined}>
-      <dt className="text-[11px] font-semibold uppercase text-[#94a3b8]">{label}</dt>
+      <dt className="text-[11px] font-semibold uppercase text-[#64748b]">{label}</dt>
       <dd className={`mt-1 font-medium text-[#0f172a] ${preserveWhitespace ? "whitespace-pre-wrap" : ""}`}>{value}</dd>
     </div>
   );

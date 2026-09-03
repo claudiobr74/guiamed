@@ -41,7 +41,7 @@ export default async function TabelasPage({
               <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais códigos nesta paginação.</p>
             ) : (
               <table className="w-full text-left text-[13px]">
-                <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Sistema</th><th className="pb-2">Código</th><th className="pb-2">Descrição</th><th className="pb-2">Versão</th></tr></thead>
+                <thead className="text-[11px] uppercase text-[#64748b]"><tr><th className="pb-2">Sistema</th><th className="pb-2">Código</th><th className="pb-2">Descrição</th><th className="pb-2">Versão</th></tr></thead>
                 <tbody>
                   {codes.map((c) => (
                     <tr key={c.id} className="border-t border-[#e2e8f0]">

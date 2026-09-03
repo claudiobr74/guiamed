@@ -42,7 +42,7 @@ export function ProcedureCodeManager({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-[1220px] w-full text-left text-[12px]">
-        <thead className="text-[10px] uppercase text-[#94a3b8]">
+        <thead className="text-[10px] uppercase text-[#64748b]">
           <tr>
             <th className="pb-2 pr-3">Código</th>
             <th className="pb-2 pr-3">Descrição</th>
@@ -102,7 +102,7 @@ function CodeLinkRow({
           <Badge tone={code.codeSystem === "TUSS" ? "blue" : "amber"}>{code.codeSystem}</Badge>
           {!code.active ? <Badge tone="red">inativo</Badge> : null}
         </div>
-        <div className="mt-1 text-[10px] text-[#94a3b8]">v. {code.version}</div>
+        <div className="mt-1 text-[10px] text-[#64748b]">v. {code.version}</div>
       </td>
       <td className="max-w-[300px] py-3 pr-3 text-[#475569]">{code.description}</td>
       <td className="w-[270px] py-3 pr-3">

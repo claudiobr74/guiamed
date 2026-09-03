@@ -87,7 +87,7 @@ export default async function ProcedimentosPage({
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[620px] text-left text-[13px]">
-                    <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">TUSS</th><th className="pb-2">IPASGO</th><th className="pb-2">Status</th></tr></thead>
+                    <thead className="text-[11px] uppercase text-[#64748b]"><tr><th className="pb-2">Nome</th><th className="pb-2">TUSS</th><th className="pb-2">IPASGO</th><th className="pb-2">Status</th></tr></thead>
                     <tbody>
                       {procedures.map((procedure) => {
                         const tuss = procedure.codes.find((code) => code.codeSystem === "TUSS" && code.active);

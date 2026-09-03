@@ -82,7 +82,7 @@ export default async function GuiasPage({
         <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[13px]">
-              <thead className="bg-[#f8fafc] text-[11px] uppercase text-[#94a3b8]">
+              <thead className="bg-[#f8fafc] text-[11px] uppercase text-[#64748b]">
                 <tr>
                   <th className="px-4 py-3">Paciente</th>
                   <th className="px-4 py-3">Médico</th>

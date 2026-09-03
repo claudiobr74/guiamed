@@ -46,7 +46,7 @@ export default async function TemplatesPage({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold">{t.name}{t.active ? "" : " • inativo"}</p>
-                        <p className="text-[#94a3b8]">
+                        <p className="text-[#64748b]">
                           {t.currentVersion
                             ? `v${t.currentVersion.version} • ${t.currentVersion.pageCount} pág. • ${t.currentVersion.hasAcroform ? "AcroForm" : "estático"}`
                             : "sem versão ativa"}

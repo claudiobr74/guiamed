@@ -48,7 +48,7 @@ export function KitPickerModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filtrar kits por nome, especialidade ou procedimento..."
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#94a3b8]"
+            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#64748b]"
           />
         </label>
         {filtered.length === 0 ? (
@@ -99,7 +99,7 @@ export function KitPickerModal({
           </div>
         )}
         <div className="flex flex-col gap-3 border-t border-[#e2e8f0] pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] text-[#94a3b8]">
+          <p className="text-[12px] text-[#64748b]">
             * Os itens selecionados preencherão automaticamente a etapa 3 do formulário.
           </p>
           <div className="flex flex-wrap gap-3 sm:flex-nowrap">

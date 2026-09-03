@@ -29,7 +29,7 @@ export function AppShell({
             <form action="/guias" className="hidden w-[280px] items-center gap-2 rounded-lg bg-[#f1f5f9] px-3 py-2 xl:flex">
               <Icon name="search" size={14} />
               <input
-                className="w-full bg-transparent text-[12px] outline-none placeholder:text-[#94a3b8]"
+                className="w-full bg-transparent text-[12px] outline-none placeholder:text-[#475569]"
                 placeholder="Buscar pacientes ou guias..."
                 name="q"
               />

@@ -56,7 +56,7 @@ export default async function ProcedimentoPage({ params }: { params: Promise<{ i
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[390px] text-left text-[12px]">
-                  <thead className="text-[10px] uppercase text-[#94a3b8]">
+                  <thead className="text-[10px] uppercase text-[#64748b]">
                     <tr><th className="pb-2">Sistema / código</th><th className="pb-2">Versão</th><th className="pb-2">Qtd.</th><th className="pb-2">Status</th></tr>
                   </thead>
                   <tbody>

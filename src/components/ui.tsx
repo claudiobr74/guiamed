@@ -15,7 +15,7 @@ export function Button({
   variant?: "primary" | "secondary" | "danger" | "ghost" | "subtle";
 }) {
   const styles = {
-    primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#94a3b8]",
+    primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#64748b]",
     secondary: "bg-white text-[#475569] border border-[#e2e8f0] hover:bg-[#f8fafc]",
     danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
     ghost: "bg-transparent text-[#1e5fa6] hover:bg-[#eff6ff]",
@@ -38,7 +38,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cn(
-        "h-[41px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8]",
+        "h-[41px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 text-[13px] text-[#0f172a] placeholder:text-[#64748b]",
         props.className,
       )}
     />
@@ -50,7 +50,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
     <textarea
       {...props}
       className={cn(
-        "min-h-[96px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8]",
+        "min-h-[96px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-[13px] text-[#0f172a] placeholder:text-[#64748b]",
         props.className,
       )}
     />

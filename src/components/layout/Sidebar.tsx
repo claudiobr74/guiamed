@@ -150,14 +150,14 @@ function SidebarContent({
         <Logo href="/" size="sm" />
         <nav className="flex flex-col gap-4">
           <div>
-            <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#94a3b8]">OPERACIONAL</p>
+            <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#64748b]">OPERACIONAL</p>
             {operational.map((item) => (
               <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={onNavigate} />
             ))}
           </div>
           {user.role === "admin" ? (
             <div>
-              <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#94a3b8]">ADMINISTRAÇÃO</p>
+              <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#64748b]">ADMINISTRAÇÃO</p>
               {admin.map((item) => (
                 <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={onNavigate} />
               ))}

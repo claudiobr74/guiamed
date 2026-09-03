@@ -71,7 +71,7 @@ export default async function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-left text-[13px]">
-                <thead className="text-[11px] uppercase text-[#94a3b8]">
+                <thead className="text-[11px] uppercase text-[#64748b]">
                   <tr>
                     <th className="pb-2 font-semibold">Paciente</th>
                     <th className="pb-2 font-semibold">Convênio</th>
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
                 <li key={kit.id} className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px] font-semibold">{kit.name}</p>
-                    <p className="text-[11px] text-[#94a3b8]">{kit.items.length} procedimentos</p>
+                    <p className="text-[11px] text-[#64748b]">{kit.items.length} procedimentos</p>
                   </div>
                   <Link href="/guias/nova" className="text-[12px] font-semibold text-[#1e5fa6]">
                     Usar kit

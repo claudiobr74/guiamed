@@ -35,9 +35,9 @@ export default async function ConfigPage() {
         <Card>
           <h2 className="text-[14px] font-bold">Ambiente e segurança</h2>
           <dl className="mt-3 space-y-2 text-[13px]">
-            <div><dt className="text-[#94a3b8]">Perfil atual</dt><dd>{user.role === "admin" ? "Administrador" : "Médico"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Firebase</dt><dd>{firebaseStatus === "ok" ? "guiamed-918ee" : firebaseStatus}</dd></div>
-            <div><dt className="text-[#94a3b8]">Última atualização da organização</dt><dd>{org?.updatedAt ? new Date(org.updatedAt).toLocaleString("pt-BR") : "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Perfil atual</dt><dd>{user.role === "admin" ? "Administrador" : "Médico"}</dd></div>
+            <div><dt className="text-[#64748b]">Firebase</dt><dd>{firebaseStatus === "ok" ? "guiamed-918ee" : firebaseStatus}</dd></div>
+            <div><dt className="text-[#64748b]">Última atualização da organização</dt><dd>{org?.updatedAt ? new Date(org.updatedAt).toLocaleString("pt-BR") : "—"}</dd></div>
           </dl>
           <p className="mt-4 text-[12px] text-[#475569]">
             Documentos médicos ficam no Firebase Storage privado. O acesso passa pela sessão do servidor; leitura direta do Storage não é usada para os documentos clínicos.

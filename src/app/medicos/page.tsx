@@ -38,7 +38,7 @@ export default async function MedicosPage({
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-left text-[13px]">
-                  <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">CRM</th><th className="pb-2">Especialidade</th></tr></thead>
+                  <thead className="text-[11px] uppercase text-[#64748b]"><tr><th className="pb-2">Nome</th><th className="pb-2">CRM</th><th className="pb-2">Especialidade</th></tr></thead>
                   <tbody>
                     {doctors.map((d) => (
                       <tr key={d.id} className="border-t border-[#e2e8f0]">

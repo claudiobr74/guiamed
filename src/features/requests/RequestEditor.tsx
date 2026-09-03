@@ -355,7 +355,7 @@ export function RequestEditor({
                         onClick={() => applyPatient(p)}
                       >
                         <span className="font-semibold">{p.fullName}</span>
-                        <span className="text-[#94a3b8]">{p.cpf ?? "sem CPF"}</span>
+                        <span className="text-[#64748b]">{p.cpf ?? "sem CPF"}</span>
                       </button>
                     </li>
                   ))}
@@ -432,11 +432,11 @@ export function RequestEditor({
             {selectedDoctor ? (
               <div className="mt-4 flex flex-wrap gap-8 text-[13px]">
                 <div>
-                  <p className="text-[11px] text-[#94a3b8]">REGISTRO CRM</p>
+                  <p className="text-[11px] text-[#64748b]">REGISTRO CRM</p>
                   <p className="font-semibold">CRM {selectedDoctor.crm} - {selectedDoctor.crmState}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[#94a3b8]">RQE ESPECIALIDADE</p>
+                  <p className="text-[11px] text-[#64748b]">RQE ESPECIALIDADE</p>
                   <p className="font-semibold">{selectedDoctor.rqe ? `RQE ${selectedDoctor.rqe}` : "—"} {selectedDoctor.specialty ? `(${selectedDoctor.specialty})` : ""}</p>
                 </div>
               </div>
@@ -569,7 +569,7 @@ export function RequestEditor({
           ) : null}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-[13px]">
-              <thead className="text-[11px] uppercase text-[#94a3b8]">
+              <thead className="text-[11px] uppercase text-[#64748b]">
                 <tr>
                   <th className="pb-2">Procedimento</th>
                   <th className="pb-2">TUSS</th>
@@ -645,14 +645,14 @@ export function RequestEditor({
         <Card>
           <h2 className="mb-4 text-[14px] font-bold">Revisão</h2>
           <dl className="grid grid-cols-1 gap-3 text-[13px] md:grid-cols-2">
-            <div><dt className="text-[#94a3b8]">Paciente</dt><dd className="font-semibold">{selectedPatient?.fullName ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Médico</dt><dd className="font-semibold">{selectedDoctor?.name ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Paciente</dt><dd className="font-semibold">{selectedPatient?.fullName ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Médico</dt><dd className="font-semibold">{selectedDoctor?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
             <div className="md:col-span-2">
-              <dt className="text-[#94a3b8]">Procedimentos</dt>
+              <dt className="text-[#64748b]">Procedimentos</dt>
               <dd>
                 <ul>
                   {request.items.map((i) => (
@@ -661,7 +661,7 @@ export function RequestEditor({
                 </ul>
               </dd>
             </div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">Justificativa</dt><dd className="whitespace-pre-wrap">{request.clinicalJustification || "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">Justificativa</dt><dd className="whitespace-pre-wrap">{request.clinicalJustification || "—"}</dd></div>
           </dl>
           {request.status === "finalized" ? (
             <form action={duplicateRequestAction.bind(null, request.id)} className="mt-4">
