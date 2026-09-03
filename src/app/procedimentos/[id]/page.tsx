@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, Field, Input, Textarea } from "@/components/ui";
-import { saveProcedureAction } from "@/app/actions";
+import { saveProcedureAction } from "@/features/admin/actions";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { getProcedureAdmin } from "@/lib/db/procedure-admin";
