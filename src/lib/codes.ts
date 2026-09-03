@@ -16,10 +16,29 @@ export type CodeLookupResult =
   | { found: true; code: CodeCatalogItem }
   | { found: false; message: typeof CODE_NOT_FOUND };
 
-export function isCodeValidOn(item: CodeCatalogItem, at: Date): boolean {
+export const DEFAULT_CLINICAL_TIME_ZONE = "America/Sao_Paulo";
+
+function calendarDate(at: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
+
+/** Vigência é inclusiva e comparada por data clínica, nunca por meia-noite UTC. */
+export function isCodeValidOn(
+  item: CodeCatalogItem,
+  at: Date,
+  timeZone: string = DEFAULT_CLINICAL_TIME_ZONE,
+): boolean {
   if (!item.active) return false;
-  if (item.validFrom && new Date(item.validFrom) > at) return false;
-  if (item.validUntil && new Date(item.validUntil) < at) return false;
+  const clinicalDate = calendarDate(at, timeZone);
+  if (item.validFrom && item.validFrom > clinicalDate) return false;
+  if (item.validUntil && item.validUntil < clinicalDate) return false;
   return true;
 }
 
@@ -46,14 +65,14 @@ function compareVersionsDesc(a: string, b: string): number {
 /** Resolve somente vínculos explícitos; nunca substitui um sistema por outro. */
 export function resolveProcedureCode(
   codes: ProcedureCode[],
-  input: { procedureId: string; codeSystem: string; at?: Date; healthInsurerId?: string | null },
+  input: { procedureId: string; codeSystem: string; at?: Date; healthInsurerId?: string | null; timeZone?: string },
 ): ProcedureCode | null {
   const at = input.at ?? new Date();
   const system = input.codeSystem.toUpperCase();
   const candidates = codes.filter((code) =>
     code.procedureId === input.procedureId &&
     code.codeSystem.toUpperCase() === system &&
-    isCodeValidOn(code, at) &&
+    isCodeValidOn(code, at, input.timeZone) &&
     (code.healthInsurerId === null || code.healthInsurerId === input.healthInsurerId),
   );
 
