@@ -41,22 +41,21 @@ export function validateRequestForFinalization(input: {
   if (template?.healthInsurerId && template.healthInsurerId !== request.healthInsurerId) error("TEMPLATE_INCOMPATIBLE", "O template não é compatível com o convênio selecionado.");
 
   if (request.items.length === 0) error("PROCEDURE_REQUIRED", "Adicione ao menos um procedimento.");
+  if (request.items.length > 0 && !request.tussTableKey?.trim()) {
+    error("TUSS_TABLE_REQUIRED", "Selecione a Tabela TUSS utilizada nesta guia.");
+  }
   const procedureCapacity = maxRowsFromRepeaters(repeaters);
   if (procedureCapacity !== null && request.items.length > procedureCapacity) {
-    error(
-      "PROCEDURE_OVERFLOW",
-      `Este template suporta até ${procedureCapacity} procedimentos. Foram selecionados ${request.items.length}.`,
-    );
+    error("PROCEDURE_OVERFLOW", `Este template suporta até ${procedureCapacity} procedimentos. Foram selecionados ${request.items.length}.`);
   }
-  const repeaterFields = new Set(repeaters.flatMap((repeater) => repeater.columns.map((column) => column.field.toLowerCase())));
-  const tussRequired = [...repeaterFields].some((field) => field.includes("tuss"));
-  const ipasgoRequired = [...repeaterFields].some((field) => field.includes("ipasgo"));
+
   for (const item of request.items) {
-    if (!Number.isInteger(item.quantity) || item.quantity <= 0) error("INVALID_QUANTITY", `A quantidade de ${item.procedureName} deve ser um inteiro maior que zero.`, item.id);
-    if (tussRequired && !item.tussCodeSnapshot) error("TUSS_REQUIRED", `${item.procedureName} está sem código TUSS.`, item.id);
-    else if (!item.tussCodeSnapshot) warning("TUSS_NOT_FOUND", `${item.procedureName} está sem código TUSS.`, item.id);
-    if (ipasgoRequired && !item.ipasgoCodeSnapshot) error("IPASGO_REQUIRED", `${item.procedureName} está sem código IPASGO.`, item.id);
-    else if (!item.ipasgoCodeSnapshot) warning("IPASGO_NOT_FOUND", `${item.procedureName} está sem código IPASGO.`, item.id);
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      error("INVALID_QUANTITY", `A quantidade de ${item.procedureName} deve ser um inteiro maior que zero.`, item.id);
+    }
+    if (!item.tussCodeSnapshot) {
+      error("TUSS_REQUIRED", `${item.procedureName} não possui código válido na Tabela TUSS escolhida.`, item.id);
+    }
   }
 
   const requiredMappings = mappings.filter((mapping) => mapping.required);
@@ -74,9 +73,17 @@ export function validateRequestForFinalization(input: {
       if (!request.clinicalJustification?.trim()) error("JUSTIFICATION_REQUIRED", "Informe a justificativa clínica.");
       continue;
     }
-    if (semantic === "doctor.crm") continue; // já validado acima com mensagem clínica específica
+    if (semantic === "doctor.crm") continue;
     if (semantic === "signature.image") {
       if (!request.doctor?.signatureFile) error("SIGNATURE_REQUIRED", "O template exige a imagem de assinatura do médico.");
+      continue;
+    }
+
+    const procedure = /^procedures\[(\d+)\]\.([a-zA-Z_]+)$/.exec(semantic);
+    const item = procedure ? request.items[Number(procedure[1])] : undefined;
+    const field = procedure?.[2]?.toLowerCase();
+    if (field === "ipasgo") {
+      error("LEGACY_IPASGO_MAPPING", "Este template contém um campo IPASGO do modelo antigo. Refaça o mapping usando a Tabela TUSS atual.", item?.id);
       continue;
     }
 
@@ -85,13 +92,8 @@ export function validateRequestForFinalization(input: {
     );
     if (mappingErrors.length === 0) continue;
 
-    const procedure = /^procedures\[(\d+)\]\.([a-zA-Z_]+)$/.exec(semantic);
-    const item = procedure ? request.items[Number(procedure[1])] : undefined;
-    const field = procedure?.[2]?.toLowerCase();
     if (field === "tuss") {
       error("TUSS_REQUIRED", `${item?.procedureName ?? "Procedimento"} está sem código TUSS exigido pelo template.`, item?.id);
-    } else if (field === "ipasgo") {
-      error("IPASGO_REQUIRED", `${item?.procedureName ?? "Procedimento"} está sem código IPASGO exigido pelo template.`, item?.id);
     } else {
       error("REQUIRED_MAPPING_EMPTY", mappingErrors[0], item?.id);
     }
