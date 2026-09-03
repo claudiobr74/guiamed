@@ -6,10 +6,10 @@ Atualizado em: 2026-09-03
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Último head remoto validado antes desta continuação: `cec416d` (`feat: validate PDF structure during inspection`).
-- Último commit local de implementação: `0d04232` (`fix: prevent silent PDF content truncation`).
-- Gates locais desta etapa: lint PASS; typecheck PASS; Vitest 98/98 PASS; build webpack PASS. O build Turbopack local não aceita o symlink externo de `node_modules`; o build padrão deve ser confirmado novamente no CI remoto.
-- CI e deploy Vercel do head remoto `cec416d`: SUCCESS.
+- Último head remoto validado antes desta continuação: `d8460f0` (checkpoint de hardening do PDF).
+- Último commit local de implementação: `e3cc00f` (`perf: avoid template scans in PDF access`).
+- Gates locais desta etapa: lint PASS; typecheck PASS; Vitest 100/100 PASS; build webpack PASS. O build Turbopack local não aceita o symlink externo de `node_modules`; o build padrão deve ser confirmado novamente no CI remoto.
+- CI e deploy Vercel do head remoto `d8460f0`: SUCCESS.
 - E2E de navegador: infraestrutura pronta, mas `browser-flow` está explicitamente SKIPPED enquanto os secrets do Firebase de teste não estiverem configurados. Não considerar isso um E2E PASS.
 
 ## Concluído no fluxo crítico
@@ -67,6 +67,16 @@ Atualizado em: 2026-09-03
 - preview de rascunho exige sessão e organização;
 - PDF finalizado não usa mais URL pública do storage: passa por `/api/files/...`, que revalida sessão, tenant e vínculo;
 - mapper de template também usa a rota autenticada, não a URL pública do storage.
+- renderização busca o template exato por ID, sem carregar todos os templates e versões históricas;
+- download administrativo de template valida o `filePath` exato com consulta limitada, sem varrer todas as versões do tenant.
+
+### Performance e minimização de dados
+
+- lista administrativa de pacientes usa paginação server-side por cursor, com até 50 registros por página;
+- convênios dos pacientes visíveis são hidratados com um único `getAll`, eliminando N+1;
+- CPF não é mais exibido integralmente na listagem: somente os dois últimos dígitos permanecem visíveis;
+- preview do importador usado pela UI busca apenas os códigos presentes no arquivo, em chunks de 400, em vez do catálogo completo;
+- importação detalhada atualiza o índice de busca depois de persistir os códigos.
 
 ### PDF / mapper
 
@@ -103,7 +113,7 @@ Atualizado em: 2026-09-03
 1. Configurar os seis secrets do Firebase de teste e obter o primeiro E2E de navegador realmente executado: `E2E_FIREBASE_SERVICE_ACCOUNT`, `E2E_FIREBASE_API_KEY`, `E2E_FIRESTORE_DATABASE_ID`, `E2E_FIREBASE_STORAGE_BUCKET`, `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
 2. Embutir uma fonte Unicode licenciada com `@pdf-lib/fontkit`, preservando a validação de glifos ausentes.
 3. Criar fixtures de PDFs representativos e validar visualmente overlay, AcroForm e continuação multipágina com Poppler.
-4. Expandir paginação para telas administrativas/listas que ainda carregam coleções completas.
+4. Paginar o catálogo administrativo de procedimentos/kits e a tela de templates, que ainda carregam coleções completas.
 
 ## Pendências
 
@@ -115,7 +125,8 @@ Atualizado em: 2026-09-03
 
 - fonte Unicode embarcada para caracteres fora de WinAnsi sem corromper dados clínicos;
 - fixtures de templates oficiais anonimizados para validar visualmente os tipos AcroForm e a continuação multipágina;
-- expandir paginação server-side para telas que ainda carregam coleções completas;
+- expandir paginação server-side para procedimentos, kits, templates, médicos e instituições;
+- remover os scans restantes ao abrir o editor de guia, priorizando templates e kits ativos;
 - busca indexada para catálogos grandes;
 - confirmar em PDFs oficiais reais se cada checkbox exige uma regra administrativa de valor marcado específica.
 
@@ -140,3 +151,6 @@ Atualizado em: 2026-09-03
 - `6dd4231` / `8668080` — carregamento seletivo de procedimentos dos kits e remoção do preload integral de pacientes/procedimentos ao abrir uma guia.
 - `cec416d` — validação de assinatura, limites e estrutura dos templates PDF;
 - `0d04232` — bloqueio de truncamento silencioso, continuação multipágina, AcroForm tipado e validação server-side do mapper.
+- `b8ac05f` — paginação de pacientes, hidratação em lote de convênios e mascaramento de CPF;
+- `030bf78` — lookup direcionado no preview de importação e atualização do índice no fluxo visível;
+- `e3cc00f` — busca direta de template na renderização e autorização de arquivo por consulta limitada.
