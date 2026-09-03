@@ -1,14 +1,15 @@
 # GuiaMed — continuidade objetiva
 
-Atualizado em: 2026-09-02
+Atualizado em: 2026-09-03
 
 ## Estado
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Head funcional validado: `8668080` (`perf: avoid loading all patients and procedures on guide open`).
-- CI do head: lint PASS; typecheck PASS; testes PASS; build PASS.
-- Deploy Vercel do head: SUCCESS.
+- Último head remoto validado antes desta continuação: `cec416d` (`feat: validate PDF structure during inspection`).
+- Último commit local de implementação: `0d04232` (`fix: prevent silent PDF content truncation`).
+- Gates locais desta etapa: lint PASS; typecheck PASS; Vitest 98/98 PASS; build webpack PASS. O build Turbopack local não aceita o symlink externo de `node_modules`; o build padrão deve ser confirmado novamente no CI remoto.
+- CI e deploy Vercel do head remoto `cec416d`: SUCCESS.
 - E2E de navegador: infraestrutura pronta, mas `browser-flow` está explicitamente SKIPPED enquanto os secrets do Firebase de teste não estiverem configurados. Não considerar isso um E2E PASS.
 
 ## Concluído no fluxo crítico
@@ -73,8 +74,16 @@ Atualizado em: 2026-09-02
 - auto-shrink baseado em largura real;
 - quebra de linha baseada em métrica real e preservação de quebras explícitas;
 - alinhamento `left`, `center` e `right` respeitado no overlay;
-- texto que ainda excede o campo é limitado ao espaço disponível;
-- fluxo AcroForm existente preservado;
+- texto que excede largura, altura ou `maxCharacters` não é mais cortado ou substituído por reticências: a geração retorna erro explícito sem incluir PHI;
+- auto-shrink agora busca um tamanho que satisfaça simultaneamente largura e altura;
+- palavras longas são quebradas preservando o conteúdo; se ainda não couberem, a geração é bloqueada;
+- múltiplos repeaters funcionam como continuação sequencial e a validação central soma a capacidade configurada;
+- `PROCEDURE_OVERFLOW` passou a integrar a validação estruturada de finalização;
+- AcroForm é despachado pelo tipo real: text field, checkbox, radio, dropdown e option list;
+- opções de radio/dropdown/lista precisam coincidir exatamente com valores oficiais do campo;
+- campo AcroForm ausente, tipo incompatível e falha de aparência não caem mais silenciosamente em overlay;
+- mappings e repeaters recebem validação Zod server-side de página, dimensões, fonte, colunas e vínculo com a versão;
+- caracteres fora de WinAnsi retornam erro clínico compreensível, sem corromper ou substituir glifos;
 - PDF.js não depende mais do worker hospedado no `unpkg`; worker é resolvido localmente pelo bundle;
 - mapper usa Pointer Events e funciona com mouse, toque e caneta.
 
@@ -92,8 +101,9 @@ Atualizado em: 2026-09-02
 ## Próxima tarefa exata
 
 1. Configurar os seis secrets do Firebase de teste e obter o primeiro E2E de navegador realmente executado: `E2E_FIREBASE_SERVICE_ACCOUNT`, `E2E_FIREBASE_API_KEY`, `E2E_FIRESTORE_DATABASE_ID`, `E2E_FIREBASE_STORAGE_BUCKET`, `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
-2. Substituir as buscas server-side que ainda fazem varredura de coleção por busca seletiva/indexada, especialmente `searchPatients` e `searchProcedures`.
-3. Expandir paginação para telas administrativas/listas que ainda carregam coleções completas.
+2. Embutir uma fonte Unicode licenciada com `@pdf-lib/fontkit`, preservando a validação de glifos ausentes.
+3. Criar fixtures de PDFs representativos e validar visualmente overlay, AcroForm e continuação multipágina com Poppler.
+4. Expandir paginação para telas administrativas/listas que ainda carregam coleções completas.
 
 ## Pendências
 
@@ -103,13 +113,11 @@ Atualizado em: 2026-09-02
 
 ### P1
 
-- estratégia de fonte Unicode embarcada para caracteres fora de WinAnsi sem corromper dados clínicos;
-- ampliar suporte AcroForm além de text fields quando o formulário real exigir checkbox/radio/dropdown;
-- substituir busca de paciente/procedimento baseada em varredura por índices/campos normalizados, preservando compatibilidade com registros legados;
+- fonte Unicode embarcada para caracteres fora de WinAnsi sem corromper dados clínicos;
+- fixtures de templates oficiais anonimizados para validar visualmente os tipos AcroForm e a continuação multipágina;
 - expandir paginação server-side para telas que ainda carregam coleções completas;
 - busca indexada para catálogos grandes;
-- upload robusto com limites explícitos, hash verificado e rate limiting;
-- validar política de overflow por template para casos com mais procedimentos que a capacidade do formulário.
+- confirmar em PDFs oficiais reais se cada checkbox exige uma regra administrativa de valor marcado específica.
 
 ### P2
 
@@ -130,3 +138,5 @@ Atualizado em: 2026-09-02
 - `71ee2c0` / `06c6f9a` — paginação server-side do catálogo TUSS/IPASGO;
 - `cf15146` — debounce/cancelamento das buscas clínicas;
 - `6dd4231` / `8668080` — carregamento seletivo de procedimentos dos kits e remoção do preload integral de pacientes/procedimentos ao abrir uma guia.
+- `cec416d` — validação de assinatura, limites e estrutura dos templates PDF;
+- `0d04232` — bloqueio de truncamento silencioso, continuação multipágina, AcroForm tipado e validação server-side do mapper.
