@@ -8,7 +8,7 @@ export function buildFinalizedRequestSnapshot(
   version: TemplateVersion,
 ) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     request: {
       id: request.id,
       organizationId: request.organizationId,
@@ -16,6 +16,8 @@ export function buildFinalizedRequestSnapshot(
       diagnosis: request.diagnosis,
       clinicalJustification: request.clinicalJustification,
       clinicalNotes: request.clinicalNotes,
+      tussTableKey: request.tussTableKey ?? null,
+      tussTableName: request.tussTableName ?? null,
       createdAt: request.createdAt,
     },
     patient: request.patient ? {
