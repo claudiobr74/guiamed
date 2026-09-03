@@ -2,6 +2,7 @@ import type { DocumentTemplate, FieldMapping, PdfRepeater, SurgicalRequest, Temp
 import { getCid10ByCode } from "@/lib/cid10/catalog";
 import { cidInformationalWarnings } from "@/lib/cid10/warnings";
 import { maxRowsFromRepeaters } from "@/lib/overflow";
+import { validateRequestForPdf } from "@/lib/pdf/fill";
 
 export type FinalizationIssueSeverity = "error" | "warning";
 
@@ -58,9 +59,43 @@ export function validateRequestForFinalization(input: {
     else if (!item.ipasgoCodeSnapshot) warning("IPASGO_NOT_FOUND", `${item.procedureName} está sem código IPASGO.`, item.id);
   }
 
-  const requiredFields = new Set(mappings.filter((mapping) => mapping.required).map((mapping) => mapping.semanticField));
-  if ([...requiredFields].some((field) => field.startsWith("cid")) && request.cids.length === 0) error("CID_REQUIRED", "Selecione ao menos um CID-10.");
-  if ([...requiredFields].some((field) => field.includes("justification")) && !request.clinicalJustification?.trim()) error("JUSTIFICATION_REQUIRED", "Informe a justificativa clínica.");
+  const requiredMappings = mappings.filter((mapping) => mapping.required);
+  const seenRequiredSemantics = new Set<string>();
+  for (const mapping of requiredMappings) {
+    const semantic = mapping.semanticField;
+    if (seenRequiredSemantics.has(semantic)) continue;
+    seenRequiredSemantics.add(semantic);
+
+    if (semantic === "request.cid") {
+      if (request.cids.length === 0) error("CID_REQUIRED", "Selecione ao menos um CID-10.");
+      continue;
+    }
+    if (semantic === "request.clinical_justification") {
+      if (!request.clinicalJustification?.trim()) error("JUSTIFICATION_REQUIRED", "Informe a justificativa clínica.");
+      continue;
+    }
+    if (semantic === "doctor.crm") continue; // já validado acima com mensagem clínica específica
+    if (semantic === "signature.image") {
+      if (!request.doctor?.signatureFile) error("SIGNATURE_REQUIRED", "O template exige a imagem de assinatura do médico.");
+      continue;
+    }
+
+    const mappingErrors = validateRequestForPdf(request, [mapping]).filter(
+      (message) => !message.includes("campo CRM do médico"),
+    );
+    if (mappingErrors.length === 0) continue;
+
+    const procedure = /^procedures\[(\d+)\]\.([a-zA-Z_]+)$/.exec(semantic);
+    const item = procedure ? request.items[Number(procedure[1])] : undefined;
+    const field = procedure?.[2]?.toLowerCase();
+    if (field === "tuss") {
+      error("TUSS_REQUIRED", `${item?.procedureName ?? "Procedimento"} está sem código TUSS exigido pelo template.`, item?.id);
+    } else if (field === "ipasgo") {
+      error("IPASGO_REQUIRED", `${item?.procedureName ?? "Procedimento"} está sem código IPASGO exigido pelo template.`, item?.id);
+    } else {
+      error("REQUIRED_MAPPING_EMPTY", mappingErrors[0], item?.id);
+    }
+  }
 
   for (const selected of request.cids) {
     const cid = getCid10ByCode(selected.codeSnapshot);
