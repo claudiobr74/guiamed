@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCsv, parseSheetMatrix, validateImportRows } from "@/lib/import-codes";
 import { summarizeImportDiff } from "@/lib/import-diff";
+import { buildImportPreview } from "@/lib/import-preview";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { buildJustificationDraft } from "@/lib/justification";
 
@@ -49,24 +50,51 @@ describe("importação", () => {
     expect(rows[2]?.code).toBe("40302000");
   });
 
-  it("resume a diferença sem inventar conflitos", () => {
+  it("resume a diferença e lista conflitos reais", () => {
     const diff = summarizeImportDiff(
       [
         { codeSystem: "TUSS", code: "1", description: "Novo", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
         { codeSystem: "TUSS", code: "2", description: "Alterado", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
         { codeSystem: "TUSS", code: "3", description: "Igual", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
         { codeSystem: "TUSS", code: "4", description: "Velho", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: false },
+        { codeSystem: "TUSS", code: "5", description: "Retorno", version: "2026.1", validFrom: null, validUntil: null, procedureName: null, active: true },
       ],
       [
         { codeSystem: "TUSS", code: "2", version: "2026.1", description: "Antigo", active: true },
         { codeSystem: "TUSS", code: "3", version: "2026.1", description: "Igual", active: true },
         { codeSystem: "TUSS", code: "4", version: "2026.1", description: "Velho", active: true },
+        { codeSystem: "TUSS", code: "5", version: "2026.1", description: "Retorno", active: false },
       ],
     );
     expect(diff.inserted).toBe(1);
     expect(diff.descriptionChanged).toBe(1);
     expect(diff.unchanged).toBe(1);
     expect(diff.discontinued).toBe(1);
+    expect(diff.reactivated).toBe(1);
+    expect(diff.conflictCount).toBe(3);
+    expect(diff.conflicts.map((item) => item.kind)).toEqual([
+      "description_changed",
+      "discontinued",
+      "reactivated",
+    ]);
+  });
+
+  it("preview separa duplicados de inválidos e bloqueia importação", () => {
+    const validation = validateImportRows(
+      [
+        { code: "001", description: "A", version: "1" },
+        { code: "001", description: "A", version: "1" },
+        { code: "", description: "Sem código", version: "1" },
+        { code: "002", description: "B", version: "1" },
+      ],
+      "TUSS",
+    );
+    const preview = buildImportPreview(validation.rows, validation.issues, []);
+    expect(preview.duplicateCount).toBe(1);
+    expect(preview.invalidCount).toBe(1);
+    expect(preview.canImport).toBe(false);
+    expect(preview.validRowCount).toBe(2);
+    expect(preview.inserted).toBe(2);
   });
 });
 
