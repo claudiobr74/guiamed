@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { FinalizedRequestView } from "@/features/requests/FinalizedRequestView";
 import { RequestEditor } from "@/features/requests/RequestEditor";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
@@ -35,18 +36,25 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
     }
   });
   if (!data) notFound();
+
+  const selectedTemplate = data.templates.find((template) => template.id === data.request.templateId) ?? null;
+
   return (
-    <AppShell user={user} title="Nova solicitação cirúrgica">
-      <RequestEditor
-        initial={data.request}
-        patients={[]}
-        doctors={data.doctors}
-        institutions={data.institutions}
-        insurers={data.insurers}
-        templates={data.templates}
-        kits={data.kits}
-        kitProcedures={data.kitProcedures}
-      />
+    <AppShell user={user} title={data.request.status === "draft" ? "Nova solicitação cirúrgica" : "Guia cirúrgica"}>
+      {data.request.status === "draft" ? (
+        <RequestEditor
+          initial={data.request}
+          patients={[]}
+          doctors={data.doctors}
+          institutions={data.institutions}
+          insurers={data.insurers}
+          templates={data.templates}
+          kits={data.kits}
+          kitProcedures={data.kitProcedures}
+        />
+      ) : (
+        <FinalizedRequestView request={data.request} template={selectedTemplate} />
+      )}
     </AppShell>
   );
 }

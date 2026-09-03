@@ -49,12 +49,15 @@ export function JustificationDrawer({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon name="sparkle" size={18} />
-          <h2 className="text-[16px] font-bold">Gerar justificativa com IA</h2>
+          <h2 className="text-[16px] font-bold">Gerar justificativa</h2>
         </div>
         <button type="button" onClick={onClose} aria-label="Fechar">
           <Icon name="close" size={16} />
         </button>
       </div>
+      <p className="rounded-lg bg-[#f8fafc] px-3 py-2 text-[12px] text-[#475569]">
+        O GuiaMed organiza apenas os fatos informados abaixo. Este gerador não usa IA nem cria informações clínicas por inferência.
+      </p>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
         <Field label="Sintomas">
           <Textarea value={form.symptoms} onChange={(e) => setForm((f) => ({ ...f, symptoms: e.target.value }))} className="min-h-16" />
@@ -89,7 +92,7 @@ export function JustificationDrawer({
           {busy ? "Gerando..." : "Gerar justificativa"}
         </Button>
         <p className="text-center text-[11px] text-[#475569]">
-          O texto gerado será inserido no campo de justificativa para sua revisão. Só entram fatos informados.
+          O texto será inserido no campo de justificativa para sua revisão. Só entram fatos informados.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {([
