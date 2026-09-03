@@ -1,7 +1,14 @@
 import { PDFDocument } from "pdf-lib";
+import { validateInspectedPdf, validatePdfSignature } from "@/lib/pdf/upload-validation";
 
 export async function inspectPdf(bytes: Uint8Array) {
-  const pdf = await PDFDocument.load(bytes);
+  validatePdfSignature(bytes);
+  let pdf: PDFDocument;
+  try {
+    pdf = await PDFDocument.load(bytes);
+  } catch {
+    throw new Error("Não foi possível abrir o PDF. Verifique se o arquivo é válido e não está corrompido ou protegido.");
+  }
   const pages = pdf.getPages();
   const first = pages[0];
   let hasAcroform = false;
@@ -20,11 +27,13 @@ export async function inspectPdf(bytes: Uint8Array) {
   } catch {
     hasAcroform = false;
   }
-  return {
+  const meta = {
     pageCount: pages.length,
     pageWidth: first ? first.getWidth() : null,
     pageHeight: first ? first.getHeight() : null,
     hasAcroform,
     acroformFields,
   };
+  validateInspectedPdf(meta);
+  return meta;
 }
