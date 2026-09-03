@@ -5,7 +5,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { dashboardStats, listKits, listRequests } from "@/lib/db/repos";
+import { listRequestPage } from "@/lib/db/request-page";
+import { dashboardStats, listKits } from "@/lib/db/repos";
 import { createRequestAction } from "@/app/actions";
 
 function statusTone(status: string) {
@@ -22,12 +23,14 @@ function statusLabel(status: string) {
 
 export default async function DashboardPage() {
   const user = await requirePageUser();
-  const { stats, requests, kits } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
-    stats: await dashboardStats(db, user.organizationId),
-    requests: await listRequests(db, user.organizationId, {}),
-    kits: await listKits(db, user.organizationId),
-  }));
-  const recent = requests.slice(0, 8);
+  const { stats, recent, kits } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const [stats, requestPage, kits] = await Promise.all([
+      dashboardStats(db, user.organizationId),
+      listRequestPage(db, user.organizationId, { limit: 8 }),
+      listKits(db, user.organizationId),
+    ]);
+    return { stats, recent: requestPage.items, kits };
+  });
 
   return (
     <AppShell
