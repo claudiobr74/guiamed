@@ -13,33 +13,48 @@ function resolveRequestedOrDefault(input: {
   codes: ProcedureCode[];
   requestedId: string | null;
   procedureId: string;
-  codeSystem: string;
   at: Date;
   healthInsurerId: string | null;
+  tableKey: string;
 }): ProcedureCode | null {
-  const resolved = resolveProcedureCode(input.codes, input);
+  const resolveInput = {
+    procedureId: input.procedureId,
+    codeSystem: "TUSS",
+    at: input.at,
+    healthInsurerId: input.healthInsurerId,
+    tableKey: input.tableKey,
+  };
+  const resolved = resolveProcedureCode(input.codes, resolveInput);
   if (!input.requestedId) return resolved;
 
   const requested = input.codes.find((code) => code.id === input.requestedId) ?? null;
   if (!requested) throw new RequestItemError("Código não localizado na base.");
-  const validRequested = resolveProcedureCode([requested], input);
+  const validRequested = resolveProcedureCode([requested], resolveInput);
   if (!validRequested) {
     throw new RequestItemError(
-      `O código ${requested.code} não está vigente ou não pertence ao procedimento, sistema ou convênio selecionado.`,
+      `O código ${requested.code} não pertence à Tabela TUSS escolhida, não está vigente ou não está vinculado ao procedimento.`,
     );
   }
   return validRequested;
 }
 
-/** Reconstrói snapshots exclusivamente a partir do catálogo confiável do tenant. */
+/**
+ * Reconstrói snapshots exclusivamente a partir da Tabela TUSS escolhida manualmente.
+ * Não existe fallback para outra tabela e o fluxo novo não materializa IPASGO em paralelo.
+ */
 export function materializeRequestItems(input: {
   requestId: string;
   items: RequestItem[];
   procedures: Procedure[];
   codes: ProcedureCode[];
   healthInsurerId: string | null;
+  tussTableKey?: string | null;
   at?: Date;
 }): RequestItem[] {
+  if (input.items.length > 0 && !input.tussTableKey?.trim()) {
+    throw new RequestItemError("Selecione a Tabela TUSS antes de adicionar procedimentos.");
+  }
+  const tableKey = input.tussTableKey?.trim() ?? "";
   const at = input.at ?? new Date();
   const procedures = new Map(input.procedures.map((procedure) => [procedure.id, procedure]));
   const seen = new Set<string>();
@@ -51,21 +66,28 @@ export function materializeRequestItems(input: {
     if (seen.has(item.id)) throw new RequestItemError("Item de procedimento duplicado na guia.");
     seen.add(item.id);
 
-    const tuss = resolveRequestedOrDefault({ codes: input.codes, requestedId: item.tussCodeId, procedureId: procedure.id, codeSystem: "TUSS", at, healthInsurerId: input.healthInsurerId });
-    const ipasgo = resolveRequestedOrDefault({ codes: input.codes, requestedId: item.ipasgoCodeId, procedureId: procedure.id, codeSystem: "IPASGO", at, healthInsurerId: input.healthInsurerId });
+    const tuss = resolveRequestedOrDefault({
+      codes: input.codes,
+      requestedId: item.tussCodeId,
+      procedureId: procedure.id,
+      at,
+      healthInsurerId: input.healthInsurerId,
+      tableKey,
+    });
 
     return {
       ...item,
       requestId: input.requestId,
       procedureName: procedure.name,
       tussCodeId: tuss?.id ?? null,
-      ipasgoCodeId: ipasgo?.id ?? null,
       tussCodeSnapshot: tuss?.code ?? null,
-      ipasgoCodeSnapshot: ipasgo?.code ?? null,
       tussDescriptionSnapshot: tuss?.description ?? null,
-      ipasgoDescriptionSnapshot: ipasgo?.description ?? null,
       tussVersionSnapshot: tuss?.version ?? null,
-      ipasgoVersionSnapshot: ipasgo?.version ?? null,
+      // O fluxo novo usa uma Tabela TUSS escolhida. Campos IPASGO ficam vazios.
+      ipasgoCodeId: null,
+      ipasgoCodeSnapshot: null,
+      ipasgoDescriptionSnapshot: null,
+      ipasgoVersionSnapshot: null,
       quantity: parseQuantity(item.quantity),
       sortOrder: index,
     };
