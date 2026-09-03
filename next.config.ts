@@ -35,6 +35,13 @@ export const securityHeaders = [
 ] as const;
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // O app envia templates em partes binárias de até 3 MB. O limite de 4 MB
+    // preserva margem abaixo do teto de 4,5 MB da Vercel por Function.
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
+  },
   serverExternalPackages: ["firebase-admin", "@google-cloud/firestore", "@google-cloud/storage", "exceljs"],
   outputFileTracingIncludes: {
     "/*": ["./node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf"],
