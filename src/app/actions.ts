@@ -26,8 +26,10 @@ import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { inspectPdf } from "@/lib/pdf/inspect";
 import { validateMappingsForTemplate, validateRepeaterForTemplate } from "@/lib/pdf/mapping-validation";
 import { renderRequestPdf } from "@/lib/pdf/render-request";
+import { validatePdfUploadMetadata } from "@/lib/pdf/upload-validation";
 import { parseQuantity } from "@/lib/quantity";
 import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
+import { assertRateLimit } from "@/lib/security/rate-limit";
 import { deleteObject, putObject } from "@/lib/storage";
 import type {
   Doctor,
@@ -291,9 +293,18 @@ export async function uploadTemplateAction(formData: FormData) {
   const user = await requireAdmin();
   const file = formData.get("file");
   if (!(file instanceof File)) throw new Error("Envie um PDF.");
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    throw new Error("O arquivo deve ser um PDF.");
-  }
+
+  // Valide metadados antes de alocar o arquivo inteiro em memória.
+  validatePdfUploadMetadata({ name: file.name, type: file.type, size: file.size });
+  await withOrganizationContext(user.organizationId, user.id, (db) =>
+    assertRateLimit(db, user.organizationId, {
+      actorId: user.id,
+      action: "upload_pdf_template",
+      limit: 10,
+      windowMs: 60_000,
+    }),
+  );
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   const meta = await inspectPdf(bytes);
   const stored = await putObject("pdf-templates", user.organizationId, file.name, bytes);
