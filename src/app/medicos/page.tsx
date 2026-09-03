@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input } from "@/components/ui";
+import { saveDoctorAction } from "@/features/doctors/profile-actions";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { listDoctorsPage } from "@/lib/db/admin-page";
-import { saveDoctorAction } from "@/app/actions";
 
 export default async function MedicosPage({
   searchParams,
