@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
+import { saveProcedureAction } from "@/features/admin/actions";
 import { ProcedureCodeManager } from "@/features/codes/ProcedureCodeManager";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
@@ -10,7 +11,6 @@ import {
   listProcedureCatalogPage,
   listProcedureReferencesByIds,
 } from "@/lib/db/procedure-page";
-import { saveProcedureAction } from "@/app/actions";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
 type SystemFilter = "ALL" | "TUSS" | "IPASGO";
