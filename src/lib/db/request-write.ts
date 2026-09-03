@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
+import { getTussCodeTable } from "@/lib/db/code-tables";
 import { listProceduresByIds } from "@/lib/db/procedure-lookup";
 import { materializeRequestItems } from "@/lib/requests/materialize-items";
 import { nextRequestRevision } from "@/lib/requests/revision";
@@ -30,6 +31,8 @@ function storedDraftPayload(data: Record<string, unknown>) {
     healthInsurerId: data.healthInsurerId ?? null,
     templateId: data.templateId ?? null,
     templateVersionId: data.templateVersionId ?? null,
+    tussTableKey: data.tussTableKey ?? null,
+    tussTableName: data.tussTableName ?? null,
     diagnosis: data.diagnosis ?? null,
     clinicalJustification: data.clinicalJustification ?? null,
     clinicalNotes: data.clinicalNotes ?? null,
@@ -39,12 +42,8 @@ function storedDraftPayload(data: Record<string, unknown>) {
 }
 
 /**
- * Persiste um rascunho carregando somente os procedimentos presentes na guia.
- * O fluxo anterior lia todo o catálogo de procedimentos + todos os códigos em
- * cada autosave, o que cresce de forma desnecessária com TUSS/IPASGO.
- *
- * Saves sem mudança material são idempotentes: não incrementam a revisão nem
- * invalidam uma revisão médica já validada no servidor.
+ * Persiste um rascunho usando apenas os procedimentos referenciados e a
+ * Tabela TUSS escolhida manualmente na própria guia.
  */
 export async function saveDraftWithTargetedCatalog(
   db: Db,
@@ -55,6 +54,14 @@ export async function saveDraftWithTargetedCatalog(
   revision: number;
   items: SurgicalRequest["items"];
 }> {
+  const selectedTableKey = request.tussTableKey?.trim() || null;
+  const selectedTable = selectedTableKey
+    ? await getTussCodeTable(db, user.organizationId, selectedTableKey)
+    : null;
+  if (selectedTableKey && !selectedTable) {
+    throw new Error("A Tabela TUSS selecionada não existe ou está inativa.");
+  }
+
   const procedureIds = request.items
     .map((item) => item.procedureId)
     .filter((procedureId): procedureId is string => Boolean(procedureId));
@@ -66,6 +73,7 @@ export async function saveDraftWithTargetedCatalog(
     procedures,
     codes,
     healthInsurerId: request.healthInsurerId,
+    tussTableKey: selectedTable?.key ?? null,
   });
 
   const requestRef = orgCollection(db, user.organizationId, "requests").doc(request.id);
@@ -76,6 +84,8 @@ export async function saveDraftWithTargetedCatalog(
     healthInsurerId: request.healthInsurerId,
     templateId: request.templateId,
     templateVersionId: request.templateVersionId,
+    tussTableKey: selectedTable?.key ?? null,
+    tussTableName: selectedTable?.name ?? null,
     diagnosis: request.diagnosis,
     clinicalJustification: request.clinicalJustification,
     clinicalNotes: request.clinicalNotes,
