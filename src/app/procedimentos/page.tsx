@@ -1,22 +1,67 @@
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button, Card, EmptyState, Field, Input } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { ProcedureCodeManager } from "@/features/codes/ProcedureCodeManager";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { listCodes, listInsurers, listProcedures } from "@/lib/db/repos";
+import { listCodeManagementPage, listProcedureAdminCatalog } from "@/lib/db/code-management-page";
+import { listInsurers } from "@/lib/db/repos";
 import { saveProcedureAction } from "@/app/actions";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
-export default async function ProcedimentosPage() {
+type SystemFilter = "ALL" | "TUSS" | "IPASGO";
+type LinkFilter = "all" | "linked" | "unlinked";
+
+function filterHref(input: {
+  q: string;
+  system: SystemFilter;
+  linkState: LinkFilter;
+  cursor?: string | null;
+}) {
+  const params = new URLSearchParams();
+  if (input.q) params.set("q", input.q);
+  if (input.system !== "ALL") params.set("system", input.system);
+  if (input.linkState !== "unlinked") params.set("linkState", input.linkState);
+  if (input.cursor) params.set("cursor", input.cursor);
+  const query = params.toString();
+  return query ? `/procedimentos?${query}` : "/procedimentos";
+}
+
+export default async function ProcedimentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string;
+    system?: string;
+    linkState?: string;
+    cursor?: string;
+  }>;
+}) {
   const user = await requirePageAdmin();
-  const { procedures, codes, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
-    const [procedures, codes, insurers] = await Promise.all([
-      listProcedures(db, user.organizationId),
-      listCodes(db, user.organizationId),
-      listInsurers(db, user.organizationId),
-    ]);
-    return { procedures, codes, insurers };
-  });
+  const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const system: SystemFilter = params.system === "TUSS" || params.system === "IPASGO" ? params.system : "ALL";
+  const linkState: LinkFilter =
+    params.linkState === "linked" || params.linkState === "all" ? params.linkState : "unlinked";
+
+  const { procedures, insurers, codePage } = await withOrganizationContext(
+    user.organizationId,
+    user.id,
+    async (db) => {
+      const [procedures, insurers, codePage] = await Promise.all([
+        listProcedureAdminCatalog(db, user.organizationId),
+        listInsurers(db, user.organizationId),
+        listCodeManagementPage(db, user.organizationId, {
+          q,
+          system,
+          linkState,
+          cursor: params.cursor,
+          limit: 50,
+        }),
+      ]);
+      return { procedures, insurers, codePage };
+    },
+  );
 
   return (
     <AppShell user={user} title="Procedimentos">
@@ -75,13 +120,66 @@ export default async function ProcedimentosPage() {
               Vincule cada código ao procedimento canônico, defina se ele é geral ou específico de um convênio e ajuste a quantidade padrão usada ao preencher a guia.
             </p>
           </div>
-          {codes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-[#cbd5e1] p-8 text-center text-[13px] text-[#64748b]">
-              Importe uma tabela TUSS ou IPASGO antes de criar os vínculos.
+
+          <form method="get" action="/procedimentos" className="mb-4 flex flex-wrap items-end gap-3 rounded-lg bg-[#f8fafc] p-3">
+            <div className="min-w-[240px] flex-1">
+              <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Buscar código ou descrição</label>
+              <Input name="q" defaultValue={q} placeholder="Ex.: 31403019 ou artrodese" />
             </div>
-          ) : (
-            <ProcedureCodeManager codes={codes} procedures={procedures} insurers={insurers} />
-          )}
+            <div className="w-[150px]">
+              <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Sistema</label>
+              <Select name="system" defaultValue={system}>
+                <option value="ALL">Todos</option>
+                <option value="TUSS">TUSS</option>
+                <option value="IPASGO">IPASGO</option>
+              </Select>
+            </div>
+            <div className="w-[170px]">
+              <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Vínculo</label>
+              <Select name="linkState" defaultValue={linkState}>
+                <option value="unlinked">Sem vínculo</option>
+                <option value="linked">Vinculados</option>
+                <option value="all">Todos</option>
+              </Select>
+            </div>
+            <Button type="submit">Filtrar</Button>
+            {(q || system !== "ALL" || linkState !== "unlinked" || params.cursor) ? (
+              <Link href="/procedimentos" className="px-2 py-2 text-[12px] font-semibold text-[#64748b]">
+                Limpar
+              </Link>
+            ) : null}
+          </form>
+
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#64748b]">
+            <span>
+              {codePage.items.length} código(s) nesta página • até 50 resultados por página
+              {q ? ` • busca ${codePage.searchIndexed ? "indexada" : "compatível com base legada"}` : ""}
+            </span>
+            {params.cursor ? (
+              <Link href={filterHref({ q, system, linkState })} className="font-semibold text-[#1e5fa6]">
+                Voltar ao início
+              </Link>
+            ) : null}
+          </div>
+
+          {codePage.scanLimitReached ? (
+            <p className="mb-3 rounded-lg bg-[#fff7ed] px-3 py-2 text-[12px] text-[#b45309]">
+              Esta página atingiu o limite seguro de leitura antes de completar 50 resultados. Use a próxima página ou conclua a reindexação em Configurações para acelerar buscas textuais.
+            </p>
+          ) : null}
+
+          <ProcedureCodeManager codes={codePage.items} procedures={procedures} insurers={insurers} />
+
+          {codePage.nextCursor ? (
+            <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
+              <Link
+                href={filterHref({ q, system, linkState, cursor: codePage.nextCursor })}
+                className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
+              >
+                Próximos resultados
+              </Link>
+            </div>
+          ) : null}
         </Card>
       </div>
     </AppShell>
