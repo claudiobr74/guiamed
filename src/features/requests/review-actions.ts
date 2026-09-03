@@ -5,15 +5,17 @@ import { requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids } from "@/lib/cid10/catalog";
 import { orgCollection, withOrganizationContext } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
+import { RequestChangedError } from "@/lib/requests/revision";
 import {
   validateRequestForFinalization,
   type FinalizationIssue,
 } from "@/lib/requests/finalization-validation";
 
-export async function reviewRequestAction(requestId: string): Promise<FinalizationIssue[]> {
+export async function reviewRequestAction(requestId: string, expectedRevision: number): Promise<FinalizationIssue[]> {
   const user = await requireUser();
   return withOrganizationContext(user.organizationId, user.id, async (db) => {
     const request = await repos.hydrateRequest(db, user.organizationId, requestId);
+    if (request.revision !== expectedRevision) throw new RequestChangedError();
     request.cids = normalizeRequestCids(request.cids, request.id);
 
     const template = request.templateId
@@ -29,7 +31,36 @@ export async function reviewRequestAction(requestId: string): Promise<Finalizati
         ])
       : [[], []];
 
-    return validateRequestForFinalization({ request, template, version, mappings, repeaters });
+    const issues = validateRequestForFinalization({ request, template, version, mappings, repeaters });
+    const hasBlockingIssues = issues.some((issue) => issue.severity === "error");
+    const requestRef = orgCollection(db, user.organizationId, "requests").doc(requestId);
+    const validatedAt = new Date().toISOString();
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(requestRef);
+      if (!snapshot.exists) throw new Error("Solicitação não encontrada.");
+      const data = snapshot.data() ?? {};
+      if (data.status !== "draft" || Number(data.revision ?? 0) !== expectedRevision) {
+        throw new RequestChangedError();
+      }
+      transaction.set(
+        requestRef,
+        hasBlockingIssues
+          ? {
+              reviewValidationRevision: null,
+              reviewValidatedAt: null,
+              reviewValidatedBy: null,
+            }
+          : {
+              reviewValidationRevision: expectedRevision,
+              reviewValidatedAt: validatedAt,
+              reviewValidatedBy: user.id,
+            },
+        { merge: true },
+      );
+    });
+
+    return issues;
   });
 }
 
