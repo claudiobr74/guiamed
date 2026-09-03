@@ -6,7 +6,7 @@ import { withOrganizationContext } from "@/lib/db/client";
 import { updateOrganizationSettings } from "@/lib/db/organization";
 import { parseOrganizationSettings } from "@/lib/validation/organization";
 
-export async function saveOrganizationSettingsAction(formData: FormData) {
+export async function saveOrganizationSettingsAction(formData: FormData): Promise<void> {
   const user = await requireAdmin();
   const input = parseOrganizationSettings({
     name: formData.get("name"),
@@ -15,9 +15,8 @@ export async function saveOrganizationSettingsAction(formData: FormData) {
     email: formData.get("email"),
     address: formData.get("address"),
   });
-  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+  await withOrganizationContext(user.organizationId, user.id, (db) =>
     updateOrganizationSettings(db, user, input),
   );
   revalidatePath("/configuracoes");
-  return saved;
 }
