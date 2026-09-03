@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { TemplateUploadForm } from "@/features/templates/TemplateUploadForm";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
 import { listTemplatesPage } from "@/lib/db/template-page";
-import { listInstitutions, listInsurers } from "@/lib/db/repos";
-import { uploadTemplateAction } from "@/app/actions";
 
 export default async function TemplatesPage({
   searchParams,
@@ -15,14 +13,9 @@ export default async function TemplatesPage({
 }) {
   const user = await requirePageAdmin();
   const { cursor } = await searchParams;
-  const { templatePage, institutions, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
-    const [templatePage, institutions, insurers] = await Promise.all([
-      listTemplatesPage(db, user.organizationId, { cursor, limit: 20 }),
-      listInstitutions(db, user.organizationId),
-      listInsurers(db, user.organizationId),
-    ]);
-    return { templatePage, institutions, insurers };
-  });
+  const templatePage = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    listTemplatesPage(db, user.organizationId, { cursor, limit: 20 }),
+  );
   const templates = templatePage.items;
 
   return (
@@ -101,32 +94,7 @@ export default async function TemplatesPage({
         {user.role === "admin" ? (
           <Card>
             <h2 className="mb-3 text-[14px] font-bold">Upload do PDF original</h2>
-            <form
-              action={async (formData) => {
-                "use server";
-                const result = await uploadTemplateAction(formData);
-                redirect(`/templates/${result.versionId}/mapper`);
-              }}
-              className="flex flex-col gap-3"
-            >
-              <Field label="Nome"><Input name="name" required placeholder="Solicitação cirúrgica IPASGO" /></Field>
-              <Field label="Instituição">
-                <Select name="institutionId" defaultValue="">
-                  <option value="">Nenhuma</option>
-                  {institutions.filter((institution) => institution.active).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Operadora">
-                <Select name="healthInsurerId" defaultValue="">
-                  <option value="">Nenhuma</option>
-                  {insurers.filter((insurer) => insurer.active).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Arquivo PDF">
-                <Input name="file" type="file" accept="application/pdf" required />
-              </Field>
-              <Button type="submit">Enviar e abrir editor</Button>
-            </form>
+            <TemplateUploadForm />
           </Card>
         ) : null}
       </div>
