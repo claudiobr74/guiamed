@@ -3,8 +3,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, Card } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
+import { listGeneratedDocuments } from "@/lib/db/generated-documents";
 import { hydrateRequestDirect } from "@/lib/db/request-hydration";
-import { listGenerated } from "@/lib/db/repos";
 import { authenticatedFileUrl } from "@/lib/storage/path";
 import { notFound } from "next/navigation";
 import { CODE_NOT_FOUND } from "@/types/domain";
@@ -23,7 +23,7 @@ export default async function PreviewPage({
     try {
       return {
         request: await hydrateRequestDirect(db, user.organizationId, id),
-        docs: await listGenerated(db, user.organizationId, id),
+        docs: await listGeneratedDocuments(db, user.organizationId, id),
       };
     } catch {
       return null;
@@ -34,14 +34,42 @@ export default async function PreviewPage({
   const selectedDocument = selectedDocumentId
     ? data.docs.find((document) => document.id === selectedDocumentId)
     : data.docs[0];
-  const pdfUrl =
-    data.request.status === "draft"
-      ? `/api/guias/${encodeURIComponent(id)}/preview`
-      : selectedDocument
-        ? authenticatedFileUrl(selectedDocument.filePath)
-        : null;
-  const primaryCid = data.request.cids[0];
   const isDraft = data.request.status === "draft";
+  const snapshot = isDraft ? null : selectedDocument?.requestSnapshot ?? null;
+  const pdfUrl = isDraft
+    ? `/api/guias/${encodeURIComponent(id)}/preview`
+    : selectedDocument
+      ? authenticatedFileUrl(selectedDocument.filePath)
+      : null;
+
+  const patientName = snapshot?.patient?.fullName ?? data.request.patient?.fullName ?? "—";
+  const insurerName = snapshot?.healthInsurer?.name ?? data.request.healthInsurer?.name ?? data.request.patient?.healthInsurerName ?? "—";
+  const doctorLabel = snapshot?.doctor
+    ? `${snapshot.doctor.name} · CRM ${snapshot.doctor.crm}/${snapshot.doctor.crmState}`
+    : data.request.doctor
+      ? `${data.request.doctor.name} · CRM ${data.request.doctor.crm}/${data.request.doctor.crmState}`
+      : "—";
+  const primaryCid = snapshot?.cids[0]
+    ? `${snapshot.cids[0].code} · ${snapshot.cids[0].description}`
+    : data.request.cids[0]
+      ? `${data.request.cids[0].codeSnapshot} · ${data.request.cids[0].descriptionSnapshot}`
+      : "—";
+  const diagnosis = snapshot?.request.diagnosis ?? data.request.diagnosis?.trim() ?? "—";
+  const displayItems = snapshot
+    ? snapshot.items.toSorted((left, right) => left.sortOrder - right.sortOrder).map((item, index) => ({
+        key: `${item.procedureId ?? "snapshot"}-${item.sortOrder}-${index}`,
+        procedureName: item.procedureName,
+        quantity: item.quantity,
+        tussCode: item.tussCode,
+        ipasgoCode: item.ipasgoCode,
+      }))
+    : data.request.items.toSorted((left, right) => left.sortOrder - right.sortOrder).map((item) => ({
+        key: item.id,
+        procedureName: item.procedureName,
+        quantity: item.quantity,
+        tussCode: item.tussCodeSnapshot,
+        ipasgoCode: item.ipasgoCodeSnapshot,
+      }));
 
   return (
     <AppShell user={user} title={isDraft ? "Visualização da guia" : "Documento da guia"}>
@@ -74,6 +102,11 @@ export default async function PreviewPage({
         </section>
 
         <aside className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start">
+          {!isDraft && !snapshot ? (
+            <p role="note" className="rounded-lg bg-[#fff7ed] px-3 py-2 text-[11px] text-[#9a3412]">
+              Documento legado sem snapshot estruturado. O PDF é a referência histórica; o resumo usa cadastros atuais como fallback.
+            </p>
+          ) : null}
           <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-[14px] font-bold">Dados inseridos</h2>
@@ -82,34 +115,28 @@ export default async function PreviewPage({
               </Badge>
             </div>
             <dl className="divide-y divide-[#e2e8f0] text-[12px]">
-              <SummaryRow label="Paciente" value={data.request.patient?.fullName ?? "—"} />
-              <SummaryRow label="Convênio" value={data.request.healthInsurer?.name ?? data.request.patient?.healthInsurerName ?? "—"} />
-              <SummaryRow
-                label="Médico solicitante"
-                value={data.request.doctor ? `${data.request.doctor.name} · CRM ${data.request.doctor.crm}/${data.request.doctor.crmState}` : "—"}
-              />
-              <SummaryRow
-                label="CID principal"
-                value={primaryCid ? `${primaryCid.codeSnapshot} · ${primaryCid.descriptionSnapshot}` : "—"}
-              />
-              <SummaryRow label="Diagnóstico" value={data.request.diagnosis?.trim() || "—"} />
+              <SummaryRow label="Paciente" value={patientName} />
+              <SummaryRow label="Convênio" value={insurerName} />
+              <SummaryRow label="Médico solicitante" value={doctorLabel} />
+              <SummaryRow label="CID principal" value={primaryCid} />
+              <SummaryRow label="Diagnóstico" value={diagnosis || "—"} />
               <SummaryRow
                 label="Procedimentos"
-                value={`${data.request.items.length} selecionado${data.request.items.length === 1 ? "" : "s"}`}
+                value={`${displayItems.length} selecionado${displayItems.length === 1 ? "" : "s"}`}
               />
             </dl>
           </Card>
 
           <Card>
             <h2 className="text-[14px] font-bold">Procedimentos</h2>
-            {data.request.items.length > 0 ? (
+            {displayItems.length > 0 ? (
               <ul className="mt-3 space-y-3 text-[12px]">
-                {data.request.items.map((item) => (
-                  <li key={item.id} className="rounded-lg bg-[#f8fafc] px-3 py-2">
+                {displayItems.map((item) => (
+                  <li key={item.key} className="rounded-lg bg-[#f8fafc] px-3 py-2">
                     <p className="font-semibold text-[#0f172a]">{item.procedureName}</p>
                     <p className="mt-1 text-[#64748b]">
-                      Qtd. {item.quantity} · TUSS {item.tussCodeSnapshot ?? CODE_NOT_FOUND}
-                      {item.ipasgoCodeSnapshot ? ` · IPASGO ${item.ipasgoCodeSnapshot}` : ""}
+                      Qtd. {item.quantity} · TUSS {item.tussCode ?? CODE_NOT_FOUND}
+                      {item.ipasgoCode ? ` · IPASGO ${item.ipasgoCode}` : ""}
                     </p>
                   </li>
                 ))}
