@@ -4,71 +4,123 @@ import { Button, Card, EmptyState, Field, Input, Select, Textarea } from "@/comp
 import { ProcedureCodeManager } from "@/features/codes/ProcedureCodeManager";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { listCodeManagementPage, listProcedureAdminCatalog } from "@/lib/db/code-management-page";
-import { listInsurers } from "@/lib/db/repos";
+import { listCodeManagementPage } from "@/lib/db/code-management-page";
+import {
+  listInsurerReferencesByIds,
+  listProcedureCatalogPage,
+  listProcedureReferencesByIds,
+} from "@/lib/db/procedure-page";
 import { saveProcedureAction } from "@/app/actions";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
 type SystemFilter = "ALL" | "TUSS" | "IPASGO";
 type LinkFilter = "all" | "linked" | "unlinked";
 
-function filterHref(input: { q: string; system: SystemFilter; linkState: LinkFilter; cursor?: string | null }) {
+function filterHref(input: {
+  q: string;
+  system: SystemFilter;
+  linkState: LinkFilter;
+  cursor?: string | null;
+  procedureCursor?: string | null;
+}) {
   const params = new URLSearchParams();
   if (input.q) params.set("q", input.q);
   if (input.system !== "ALL") params.set("system", input.system);
   if (input.linkState !== "unlinked") params.set("linkState", input.linkState);
   if (input.cursor) params.set("cursor", input.cursor);
+  if (input.procedureCursor) params.set("procedureCursor", input.procedureCursor);
   const query = params.toString();
   return query ? `/procedimentos?${query}` : "/procedimentos";
 }
 
-export default async function ProcedimentosPage({ searchParams }: { searchParams: Promise<{ q?: string; system?: string; linkState?: string; cursor?: string }> }) {
+export default async function ProcedimentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; system?: string; linkState?: string; cursor?: string; procedureCursor?: string }>;
+}) {
   const user = await requirePageAdmin();
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const system: SystemFilter = params.system === "TUSS" || params.system === "IPASGO" ? params.system : "ALL";
   const linkState: LinkFilter = params.linkState === "linked" || params.linkState === "all" ? params.linkState : "unlinked";
 
-  const { procedures, insurers, codePage } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
-    const [procedures, insurers, codePage] = await Promise.all([
-      listProcedureAdminCatalog(db, user.organizationId),
-      listInsurers(db, user.organizationId),
+  const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const [procedurePage, codePage] = await Promise.all([
+      listProcedureCatalogPage(db, user.organizationId, { cursor: params.procedureCursor, limit: 50 }),
       listCodeManagementPage(db, user.organizationId, { q, system, linkState, cursor: params.cursor, limit: 50 }),
     ]);
-    return { procedures, insurers, codePage };
+    const procedureIds = codePage.items.map((code) => code.procedureId ?? "").filter(Boolean);
+    const insurerIds = codePage.items.map((code) => code.healthInsurerId ?? "").filter(Boolean);
+    const [linkedProcedures, linkedInsurers] = await Promise.all([
+      listProcedureReferencesByIds(db, user.organizationId, procedureIds),
+      listInsurerReferencesByIds(db, user.organizationId, insurerIds),
+    ]);
+    return { procedurePage, codePage, linkedProcedures, linkedInsurers };
   });
+  const procedures = data.procedurePage.items;
+  const codePage = data.codePage;
 
   return (
     <AppShell user={user} title="Procedimentos">
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
-          {procedures.length === 0 ? (
+          {procedures.length === 0 && !params.procedureCursor ? (
             <EmptyState title="Nenhum procedimento canônico" description="Cadastre o nome clínico e importe códigos TUSS/IPASGO na tela de tabelas. O sistema não inventa códigos." />
           ) : (
             <Card>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-[14px] font-bold">Catálogo canônico</h2>
-                <span className="text-[11px] text-[#64748b]">Clique no procedimento para editar</span>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[14px] font-bold">Catálogo canônico</h2>
+                  <p className="mt-1 text-[11px] text-[#64748b]">Até 50 procedimentos por página, com códigos apenas dos itens visíveis.</p>
+                </div>
+                {params.procedureCursor ? (
+                  <Link
+                    href={filterHref({ q, system, linkState, cursor: params.cursor })}
+                    className="text-[11px] font-semibold text-[#1e5fa6]"
+                  >
+                    Voltar ao início
+                  </Link>
+                ) : null}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[620px] text-left text-[13px]">
-                  <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">TUSS</th><th className="pb-2">IPASGO</th><th className="pb-2">Status</th></tr></thead>
-                  <tbody>
-                    {procedures.map((procedure) => {
-                      const tuss = procedure.codes.find((code) => code.codeSystem === "TUSS" && code.active);
-                      const ipasgo = procedure.codes.find((code) => code.codeSystem === "IPASGO" && code.active);
-                      return (
-                        <tr key={procedure.id} className="border-t border-[#e2e8f0]">
-                          <td className="py-2 font-semibold"><Link href={`/procedimentos/${procedure.id}`} className="text-[#1e5fa6] hover:underline">{procedure.name}</Link></td>
-                          <td>{tuss?.code ?? CODE_NOT_FOUND}</td>
-                          <td>{ipasgo?.code ?? CODE_NOT_FOUND}</td>
-                          <td>{procedure.active ? "Ativo" : "Inativo"}</td>
-                        </tr>
-                      );
+              {procedures.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais procedimentos nesta paginação.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-left text-[13px]">
+                    <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">TUSS</th><th className="pb-2">IPASGO</th><th className="pb-2">Status</th></tr></thead>
+                    <tbody>
+                      {procedures.map((procedure) => {
+                        const tuss = procedure.codes.find((code) => code.codeSystem === "TUSS" && code.active);
+                        const ipasgo = procedure.codes.find((code) => code.codeSystem === "IPASGO" && code.active);
+                        return (
+                          <tr key={procedure.id} className="border-t border-[#e2e8f0]">
+                            <td className="py-2 font-semibold"><Link href={`/procedimentos/${procedure.id}`} className="text-[#1e5fa6] hover:underline">{procedure.name}</Link></td>
+                            <td>{tuss?.code ?? CODE_NOT_FOUND}</td>
+                            <td>{ipasgo?.code ?? CODE_NOT_FOUND}</td>
+                            <td>{procedure.active ? "Ativo" : "Inativo"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {data.procedurePage.nextCursor ? (
+                <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
+                  <Link
+                    href={filterHref({
+                      q,
+                      system,
+                      linkState,
+                      cursor: params.cursor,
+                      procedureCursor: data.procedurePage.nextCursor,
                     })}
-                  </tbody>
-                </table>
-              </div>
+                    className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
+                  >
+                    Próximos 50 procedimentos
+                  </Link>
+                </div>
+              ) : null}
             </Card>
           )}
           <Card>
@@ -103,10 +155,11 @@ export default async function ProcedimentosPage({ searchParams }: { searchParams
         <Card>
           <div className="mb-4">
             <h2 className="text-[15px] font-bold text-[#0f172a]">Vínculos TUSS / IPASGO</h2>
-            <p className="mt-1 text-[12px] text-[#64748b]">Vincule cada código ao procedimento canônico, defina se ele é geral ou específico de um convênio e ajuste a quantidade padrão usada ao preencher a guia.</p>
+            <p className="mt-1 text-[12px] text-[#64748b]">Vincule cada código ao procedimento canônico, defina se ele é geral ou específico de um convênio e ajuste a quantidade padrão usada ao preencher a guia. Procedimentos e operadoras são pesquisados sob demanda.</p>
           </div>
 
           <form method="get" action="/procedimentos" className="mb-4 flex flex-wrap items-end gap-3 rounded-lg bg-[#f8fafc] p-3">
+            <input type="hidden" name="procedureCursor" value={params.procedureCursor ?? ""} />
             <div className="min-w-[240px] flex-1">
               <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Buscar código ou descrição</label>
               <Input name="q" defaultValue={q} placeholder="Ex.: 31403019 ou artrodese" />
@@ -120,21 +173,30 @@ export default async function ProcedimentosPage({ searchParams }: { searchParams
               <Select name="linkState" defaultValue={linkState}><option value="unlinked">Sem vínculo</option><option value="linked">Vinculados</option><option value="all">Todos</option></Select>
             </div>
             <Button type="submit">Filtrar</Button>
-            {(q || system !== "ALL" || linkState !== "unlinked" || params.cursor) ? <Link href="/procedimentos" className="px-2 py-2 text-[12px] font-semibold text-[#64748b]">Limpar</Link> : null}
+            {(q || system !== "ALL" || linkState !== "unlinked" || params.cursor) ? <Link href={filterHref({ q: "", system: "ALL", linkState: "unlinked", procedureCursor: params.procedureCursor })} className="px-2 py-2 text-[12px] font-semibold text-[#64748b]">Limpar filtros</Link> : null}
           </form>
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#64748b]">
             <span>{codePage.items.length} código(s) nesta página • até 50 resultados por página{q ? ` • busca ${codePage.searchIndexed ? "indexada" : "compatível com base legada"}` : ""}</span>
-            {params.cursor ? <Link href={filterHref({ q, system, linkState })} className="font-semibold text-[#1e5fa6]">Voltar ao início</Link> : null}
+            {params.cursor ? <Link href={filterHref({ q, system, linkState, procedureCursor: params.procedureCursor })} className="font-semibold text-[#1e5fa6]">Voltar ao início dos códigos</Link> : null}
           </div>
 
           {codePage.scanLimitReached ? <p className="mb-3 rounded-lg bg-[#fff7ed] px-3 py-2 text-[12px] text-[#b45309]">Esta página atingiu o limite seguro de leitura antes de completar 50 resultados. Use a próxima página ou conclua a reindexação em Configurações para acelerar buscas textuais.</p> : null}
 
-          <ProcedureCodeManager codes={codePage.items} procedures={procedures} insurers={insurers} />
+          <ProcedureCodeManager
+            codes={codePage.items}
+            linkedProcedures={data.linkedProcedures}
+            linkedInsurers={data.linkedInsurers}
+          />
 
           {codePage.nextCursor ? (
             <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
-              <Link href={filterHref({ q, system, linkState, cursor: codePage.nextCursor })} className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]">Próximos resultados</Link>
+              <Link
+                href={filterHref({ q, system, linkState, cursor: codePage.nextCursor, procedureCursor: params.procedureCursor })}
+                className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
+              >
+                Próximos resultados
+              </Link>
             </div>
           ) : null}
         </Card>
