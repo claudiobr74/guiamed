@@ -1,7 +1,7 @@
 import type { DocumentData } from "firebase-admin/firestore";
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
-import type { HealthInsurer, Institution, InstitutionKind } from "@/types/domain";
+import type { HealthInsurer, Institution, InstitutionKind, Procedure } from "@/types/domain";
 
 const RESULT_LIMIT = 20;
 
@@ -82,5 +82,26 @@ export async function searchInsurersByName(
   }));
   return results
     .filter((insurer) => insurer.active)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+export async function searchProceduresByName(
+  db: Db,
+  orgId: string,
+  query: string,
+): Promise<Procedure[]> {
+  const results = await searchNamed(db, orgId, "procedures", query, (id, data) => ({
+    id,
+    organizationId: orgId,
+    name: String(data.name ?? ""),
+    description: (data.description as string | null) ?? null,
+    specialty: (data.specialty as string | null) ?? null,
+    category: (data.category as string | null) ?? null,
+    active: data.active !== false,
+    synonyms: Array.isArray(data.synonyms) ? data.synonyms.map(String) : [],
+    codes: [],
+  }));
+  return results
+    .filter((procedure) => procedure.active)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
