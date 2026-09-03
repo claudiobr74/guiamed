@@ -1,20 +1,31 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids, searchCid10 } from "@/lib/cid10/catalog";
 import { withOrganizationContext } from "@/lib/db/client";
+import {
+  getSearchIndexStatus,
+  indexImportedProcedureCodes,
+  rebuildSearchIndexChunk,
+  searchPatientsIndexed,
+  searchProceduresIndexed,
+  upsertPatientIndexed,
+  upsertProcedureIndexed,
+} from "@/lib/db/indexed-search";
 import * as repos from "@/lib/db/repos";
-import { parseQuantity } from "@/lib/quantity";
-import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRow } from "@/lib/import-codes";
 import { summarizeImportDiff } from "@/lib/import-diff";
+import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRow } from "@/lib/import-codes";
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
+import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { inspectPdf } from "@/lib/pdf/inspect";
 import { renderRequestPdf } from "@/lib/pdf/render-request";
-import { deleteObject, putObject } from "@/lib/storage";
-import { suggestSemanticField } from "@/lib/mapping-suggest";
-import { randomUUID } from "node:crypto";
+import { parseQuantity } from "@/lib/quantity";
 import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
+import { deleteObject, putObject } from "@/lib/storage";
 import type {
   Doctor,
   FieldMapping,
@@ -24,12 +35,11 @@ import type {
   RequestStatus,
   SurgicalRequest,
 } from "@/types/domain";
-import ExcelJS from "exceljs";
 
 export async function savePatientAction(data: Partial<Patient> & { fullName: string; id?: string }) {
   const user = await requireUser();
   return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.upsertPatient(db, user.organizationId, user.id, data),
+    upsertPatientIndexed(db, user.organizationId, user.id, data),
   );
 }
 
@@ -71,7 +81,7 @@ export async function saveProcedureAction(data: {
 }) {
   const user = await requireAdmin();
   return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.upsertProcedure(db, user.organizationId, data),
+    upsertProcedureIndexed(db, user.organizationId, data),
   );
 }
 
@@ -89,23 +99,42 @@ export async function saveKitAction(data: {
 
 export async function searchProceduresAction(q: string) {
   const user = await requireUser();
-  if (!q.trim()) return [];
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.searchProcedures(db, user.organizationId, q),
-  );
+  const query = q.trim();
+  if (query.length < 2) return [];
+  return withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const status = await getSearchIndexStatus(db, user.organizationId);
+    if (!status.ready) {
+      return repos.searchProcedures(db, user.organizationId, query);
+    }
+    return searchProceduresIndexed(db, user.organizationId, query);
+  });
 }
 
 export async function searchCidsAction(q: string) {
   await requireUser();
-  if (!q.trim()) return [];
+  if (q.trim().length < 2) return [];
   return searchCid10(q);
 }
 
 export async function searchPatientsAction(q: string) {
   const user = await requireUser();
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.listPatients(db, user.organizationId, q),
+  const query = q.trim();
+  if (query.length < 2) return [];
+  return withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const status = await getSearchIndexStatus(db, user.organizationId);
+    if (!status.ready) {
+      return repos.listPatients(db, user.organizationId, query);
+    }
+    return searchPatientsIndexed(db, user.organizationId, query);
+  });
+}
+
+export async function rebuildSearchIndexesAction() {
+  const user = await requireAdmin();
+  await withOrganizationContext(user.organizationId, user.id, (db) =>
+    rebuildSearchIndexChunk(db, user.organizationId),
   );
+  revalidatePath("/configuracoes");
 }
 
 export async function createRequestAction() {
@@ -237,15 +266,17 @@ export async function importCodesAction(formData: FormData) {
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }
-  const result = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.insertCodesIdempotent(db, user.organizationId, user.id, {
+  const result = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const imported = await repos.insertCodesIdempotent(db, user.organizationId, user.id, {
       codeSystem: defaultSystem,
       version: version || validated.rows[0]?.version || "1",
       sourceFilename: file.name,
       sourceFormat: format,
       rows: validated.rows,
-    }),
-  );
+    });
+    await indexImportedProcedureCodes(db, user.organizationId, validated.rows);
+    return imported;
+  });
   return { ok: true as const, ...result };
 }
 
