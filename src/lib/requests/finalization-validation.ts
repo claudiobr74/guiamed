@@ -1,4 +1,6 @@
 import type { DocumentTemplate, FieldMapping, PdfRepeater, SurgicalRequest, TemplateVersion } from "@/types/domain";
+import { getCid10ByCode } from "@/lib/cid10/catalog";
+import { cidInformationalWarnings } from "@/lib/cid10/warnings";
 import { maxRowsFromRepeaters } from "@/lib/overflow";
 
 export type FinalizationIssueSeverity = "error" | "warning";
@@ -59,5 +61,14 @@ export function validateRequestForFinalization(input: {
   const requiredFields = new Set(mappings.filter((mapping) => mapping.required).map((mapping) => mapping.semanticField));
   if ([...requiredFields].some((field) => field.startsWith("cid")) && request.cids.length === 0) error("CID_REQUIRED", "Selecione ao menos um CID-10.");
   if ([...requiredFields].some((field) => field.includes("justification")) && !request.clinicalJustification?.trim()) error("JUSTIFICATION_REQUIRED", "Informe a justificativa clínica.");
+
+  for (const selected of request.cids) {
+    const cid = getCid10ByCode(selected.codeSnapshot);
+    if (!cid) continue;
+    for (const informational of cidInformationalWarnings(cid, request.patient?.sex)) {
+      warning(informational.code, informational.message, selected.id);
+    }
+  }
+
   return issues;
 }
