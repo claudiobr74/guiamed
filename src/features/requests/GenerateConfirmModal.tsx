@@ -76,7 +76,7 @@ export function GenerateConfirmModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, request.id, request.revision]);
+  }, [open, request]);
 
   const blockingIssues = useMemo(() => issues.filter((issue) => issue.severity === "error"), [issues]);
   const warnings = useMemo(() => issues.filter((issue) => issue.severity === "warning"), [issues]);
