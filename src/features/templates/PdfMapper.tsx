@@ -36,6 +36,10 @@ type TransformState = {
   origin: FieldMapping;
 };
 
+function formatPoint(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function PdfMapper({
   version,
   initialMappings,
@@ -48,6 +52,8 @@ export function PdfMapper({
   fileUrl: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mappingElementsRef = useRef(new Map<string, HTMLDivElement>());
+  const pendingMappingFocusRef = useRef<string | null>(null);
   const [page, setPage] = useState(1);
   const [mappings, setMappings] = useState(initialMappings);
   const [repeaters, setRepeaters] = useState(initialRepeaters);
@@ -68,6 +74,13 @@ export function PdfMapper({
     () => repeaters.find((repeater) => repeater.id === selectedRepeater) ?? null,
     [repeaters, selectedRepeater],
   );
+
+  useEffect(() => {
+    const id = pendingMappingFocusRef.current;
+    if (!id) return;
+    mappingElementsRef.current.get(id)?.focus();
+    pendingMappingFocusRef.current = null;
+  }, [mappings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +203,7 @@ export function PdfMapper({
       maxCharacters: null,
       required: false,
     };
+    pendingMappingFocusRef.current = mapping.id;
     setMappings((current) => [...current, mapping]);
     setSelected(mapping.id);
     setSelectedRepeater(null);
@@ -210,6 +224,9 @@ export function PdfMapper({
     setSelected(mapping.id);
     setSelectedRepeater(null);
     patchMapping(mapping.id, next);
+    setStatus(
+      `Campo ${mapping.semanticField}: X ${formatPoint(next.x)} pt, Y ${formatPoint(next.y)} pt.`,
+    );
   }
 
   function onResizeKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, mapping: FieldMapping) {
@@ -226,6 +243,9 @@ export function PdfMapper({
     setSelected(mapping.id);
     setSelectedRepeater(null);
     patchMapping(mapping.id, next);
+    setStatus(
+      `Campo ${mapping.semanticField}: largura ${formatPoint(next.width)} pt, altura ${formatPoint(next.height)} pt.`,
+    );
   }
 
   function startTransform(
@@ -374,9 +394,9 @@ export function PdfMapper({
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="overflow-auto rounded-xl border border-[#e2e8f0] bg-[#f1f5f9] p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px]">
-          <Button variant="secondary" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}>Página anterior</Button>
+          <Button variant="secondary" type="button" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Página anterior</Button>
           <span>Página {page} / {version.pageCount}</span>
-          <Button variant="secondary" type="button" onClick={() => setPage((p) => Math.min(version.pageCount, p + 1))}>Próxima</Button>
+          <Button variant="secondary" type="button" disabled={page === version.pageCount} onClick={() => setPage((p) => Math.min(version.pageCount, p + 1))}>Próxima</Button>
           <span id="pdf-mapper-keyboard-help" className="ml-auto max-w-[560px] text-[11px] text-[#64748b]">
             Ponteiro: arraste para criar, mover e redimensionar. Teclado: use “Adicionar campo sem desenhar”; setas movem o campo; no botão de redimensionar, setas ajustam o tamanho; Shift altera 10 pt.
           </span>
@@ -384,6 +404,8 @@ export function PdfMapper({
         <div className="relative inline-block">
           <canvas
             ref={canvasRef}
+            role="img"
+            aria-label={`Página ${page} de ${version.pageCount} do template PDF`}
             className="block max-w-full touch-none bg-white"
             onPointerDown={onPointerDown}
             onPointerUp={onPointerUp}
@@ -394,9 +416,13 @@ export function PdfMapper({
             .map((mapping) => (
               <div
                 key={mapping.id}
+                ref={(element) => {
+                  if (element) mappingElementsRef.current.set(mapping.id, element);
+                  else mappingElementsRef.current.delete(mapping.id);
+                }}
                 role="group"
                 tabIndex={0}
-                aria-label={`Campo ${mapping.semanticField}`}
+                aria-label={`Campo ${mapping.semanticField}, X ${formatPoint(mapping.x)} pt, Y ${formatPoint(mapping.y)} pt, largura ${formatPoint(mapping.width)} pt, altura ${formatPoint(mapping.height)} pt`}
                 aria-describedby="pdf-mapper-keyboard-help"
                 onFocus={() => {
                   setSelected(mapping.id);
@@ -430,7 +456,7 @@ export function PdfMapper({
                   onPointerMove={moveTransform}
                   onPointerUp={endTransform}
                   onPointerCancel={endTransform}
-                  className="absolute -bottom-1 -right-1 size-3 touch-none rounded-sm bg-[#1e5fa6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f172a]"
+                  className="absolute -bottom-3 -right-3 size-6 touch-none rounded-full border-4 border-white bg-[#1e5fa6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f172a]"
                 />
               </div>
             ))}
