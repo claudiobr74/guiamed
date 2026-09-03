@@ -1,20 +1,32 @@
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { listInsurers, listPatients } from "@/lib/db/repos";
+import { listPatientPage } from "@/lib/db/patient-page";
+import { listInsurers } from "@/lib/db/repos";
+import { maskCpfForList } from "@/lib/personal-data";
 import { savePatientAction } from "@/app/actions";
 
-export default async function PacientesPage() {
+export default async function PacientesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cursor?: string }>;
+}) {
   const user = await requirePageUser();
-  const { patients, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
-    patients: await listPatients(db, user.organizationId),
-    insurers: await listInsurers(db, user.organizationId),
-  }));
+  const { cursor } = await searchParams;
+  const { patientPage, insurers } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const [patientPage, insurers] = await Promise.all([
+      listPatientPage(db, user.organizationId, { cursor, limit: 50 }),
+      listInsurers(db, user.organizationId),
+    ]);
+    return { patientPage, insurers };
+  });
+  const patients = patientPage.items;
   return (
     <AppShell user={user} title="Pacientes">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
-        {patients.length === 0 ? (
+        {patients.length === 0 && !cursor ? (
           <EmptyState
             title="Nenhum paciente cadastrado"
             description="Cadastre seus pacientes para agilizar o preenchimento de novas guias de procedimento cirúrgico."
@@ -22,18 +34,38 @@ export default async function PacientesPage() {
           />
         ) : (
           <Card>
-            <table className="w-full text-left text-[13px]">
-              <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">CPF</th><th className="pb-2">Convênio</th></tr></thead>
-              <tbody>
-                {patients.map((p) => (
-                  <tr key={p.id} className="border-t border-[#e2e8f0]">
-                    <td className="py-2 font-semibold">{p.fullName}</td>
-                    <td>{p.cpf ?? "—"}</td>
-                    <td>{p.healthInsurerName ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[12px] text-[#64748b]">Exibindo até 50 pacientes por página.</p>
+              {cursor ? <Link href="/pacientes" className="text-[12px] font-semibold text-[#1e5fa6]">Voltar ao início</Link> : null}
+            </div>
+            {patients.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais pacientes nesta paginação.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-[13px]">
+                  <thead className="text-[11px] uppercase text-[#94a3b8]"><tr><th className="pb-2">Nome</th><th className="pb-2">CPF</th><th className="pb-2">Convênio</th></tr></thead>
+                  <tbody>
+                    {patients.map((p) => (
+                      <tr key={p.id} className="border-t border-[#e2e8f0]">
+                        <td className="py-2 font-semibold">{p.fullName}</td>
+                        <td>{maskCpfForList(p.cpf)}</td>
+                        <td>{p.healthInsurerName ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {patientPage.nextCursor ? (
+              <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
+                <Link
+                  href={`/pacientes?cursor=${encodeURIComponent(patientPage.nextCursor)}`}
+                  className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
+                >
+                  Próximos 50
+                </Link>
+              </div>
+            ) : null}
           </Card>
         )}
         <Card>

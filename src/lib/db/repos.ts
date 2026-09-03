@@ -48,7 +48,7 @@ export async function listPatients(db: Db, orgId: string, q?: string): Promise<P
   const insurers = await listInsurers(db, orgId);
   const insurerName = new Map(insurers.map((i) => [i.id, i.name]));
   return snap.docs
-    .map((doc) => mapPatient(orgId, doc.id, doc.data(), insurerName.get(String(doc.data().healthInsurerId ?? "")) ?? null))
+    .map((doc) => mapPatientRecord(orgId, doc.id, doc.data(), insurerName.get(String(doc.data().healthInsurerId ?? "")) ?? null))
     .filter((p) => matchesQuery(`${p.fullName} ${p.cpf ?? ""}`, q))
     .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
 }
@@ -62,7 +62,7 @@ export async function getPatient(db: Db, orgId: string, id: string): Promise<Pat
     const insurer = await orgCollection(db, orgId, "healthInsurers").doc(String(data.healthInsurerId)).get();
     insurerName = (insurer.data()?.name as string | null) ?? null;
   }
-  return mapPatient(orgId, snap.id, data, insurerName);
+  return mapPatientRecord(orgId, snap.id, data, insurerName);
 }
 
 export async function upsertPatient(
@@ -809,7 +809,7 @@ export async function audit(
   });
 }
 
-function mapPatient(orgId: string, id: string, data: DocumentData, insurerName: string | null): Patient {
+export function mapPatientRecord(orgId: string, id: string, data: DocumentData, insurerName: string | null): Patient {
   return {
     id,
     organizationId: orgId,
