@@ -21,7 +21,7 @@ export default async function ConfigPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,680px)_minmax(320px,1fr)]">
         <Card>
           <h2 className="text-[14px] font-bold">Clínica / organização</h2>
-          <p className="mt-1 text-[12px] text-[#64748b]">Esses dados identificam a organização no GuiaMed e podem ser usados em documentos e auditorias administrativas.</p>
+          <p className="mt-1 text-[12px] text-[#64748b]">Esses dados identificam a organização na LizaCare e podem ser usados em documentos e auditorias administrativas.</p>
           <form action={saveOrganizationSettingsAction} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="md:col-span-2"><Field label="Nome da clínica / organização"><Input name="name" defaultValue={org?.name ?? ""} required /></Field></div>
             <Field label="CNPJ"><Input name="cnpj" defaultValue={org?.cnpj ?? ""} inputMode="numeric" /></Field>
