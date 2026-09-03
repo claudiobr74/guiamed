@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
+import { procedureCodeDocumentId } from "@/lib/code-table";
 import { parseQuantity } from "@/lib/quantity";
 import type { ProcedureCode } from "@/types/domain";
 import type { NormalizedImportRow } from "@/lib/import-codes";
@@ -17,12 +18,16 @@ export async function insertCodesIdempotentWithStatus(
     version: string;
     sourceFilename: string;
     sourceFormat: "csv" | "xlsx" | "json";
+    tableKey?: string | null;
+    tableName?: string | null;
     rows: NormalizedImportRow[];
   },
 ): Promise<{ inserted: number; updated: number; batchId: string }> {
   const batchRef = orgCollection(db, orgId, "importBatches").doc();
   await batchRef.set({
     codeSystem: payload.codeSystem,
+    tableKey: payload.tableKey ?? null,
+    tableName: payload.tableName ?? null,
     sourceFilename: payload.sourceFilename,
     sourceFormat: payload.sourceFormat,
     version: payload.version,
@@ -42,7 +47,12 @@ export async function insertCodesIdempotentWithStatus(
     for (let offset = 0; offset < payload.rows.length; offset += chunkSize) {
       const rows = payload.rows.slice(offset, offset + chunkSize);
       const refs = rows.map((row) => {
-        const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
+        const docId = procedureCodeDocumentId({
+          codeSystem: row.codeSystem,
+          tableKey: payload.tableKey,
+          code: row.code,
+          version: row.version,
+        });
         return orgCollection(db, orgId, "procedureCodes").doc(docId);
       });
       const existingSnapshots = await db.getAll(...refs);
@@ -54,7 +64,7 @@ export async function insertCodesIdempotentWithStatus(
         writeBatch.set(
           refs[index],
           {
-            // Reimportação preserva vínculos e quantidades já confirmados pelo administrador.
+            // Reimportação da mesma tabela preserva vínculos e quantidades já confirmados pelo administrador.
             procedureId: (existingData?.procedureId as string | null | undefined) ?? null,
             codeSystem: row.codeSystem,
             code: row.code,
@@ -65,9 +75,13 @@ export async function insertCodesIdempotentWithStatus(
             active: row.active,
             healthInsurerId: (existingData?.healthInsurerId as string | null | undefined) ?? null,
             defaultQuantity: parseQuantity(existingData?.defaultQuantity),
+            tableKey: payload.tableKey ?? (existingData?.tableKey as string | null | undefined) ?? null,
+            tableName: payload.tableName ?? (existingData?.tableName as string | null | undefined) ?? null,
             metadata: {
               ...((existingData?.metadata as ProcedureCode["metadata"] | undefined) ?? {}),
               importedProcedureName: row.procedureName,
+              sourceTableKey: payload.tableKey ?? null,
+              sourceTableName: payload.tableName ?? null,
             },
             importBatchId: batchRef.id,
             updatedAt: now(),
