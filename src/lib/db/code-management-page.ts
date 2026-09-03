@@ -15,6 +15,7 @@ const CLINICAL_TIME_ZONE = "America/Sao_Paulo";
 export interface CodeManagementFilters {
   q?: string | null;
   system?: "ALL" | "TUSS" | "IPASGO" | null;
+  tableKey?: string | null;
   linkState?: "all" | "linked" | "unlinked" | null;
   activeState?: "all" | "active" | "inactive" | null;
   validity?: "all" | "current" | "future" | "expired" | null;
@@ -43,6 +44,8 @@ function mapCode(id: string, data: DocumentData): ProcedureCode {
     validUntil: data.validUntil ? String(data.validUntil).slice(0, 10) : null,
     version: String(data.version ?? ""),
     active: data.active !== false,
+    tableKey: (data.tableKey as string | null | undefined) ?? null,
+    tableName: (data.tableName as string | null | undefined) ?? null,
     healthInsurerId: (data.healthInsurerId as string | null) ?? null,
     defaultQuantity: parseQuantity(data.defaultQuantity),
     metadata: (data.metadata as ProcedureCode["metadata"]) ?? {},
@@ -88,11 +91,13 @@ function matchesFilters(
   today: string,
 ): boolean {
   const system = input.system ?? "ALL";
+  const tableKey = input.tableKey?.trim() ?? "";
   const linkState = input.linkState ?? "all";
   const activeState = input.activeState ?? "all";
   const version = input.version?.trim() ?? "";
 
   if (system !== "ALL" && code.codeSystem !== system) return false;
+  if (tableKey && code.tableKey !== tableKey) return false;
   if (linkState === "linked" && !code.procedureId) return false;
   if (linkState === "unlinked" && code.procedureId) return false;
   if (activeState === "active" && !code.active) return false;
@@ -104,16 +109,11 @@ function matchesFilters(
   if (!query) return true;
   const indexedText = String(data.searchText ?? "");
   if (indexedText && matchesIndexedSearch(indexedText, query)) return true;
-  const fallback = `${code.code} ${code.description}`.toLocaleLowerCase("pt-BR");
+  const fallback = `${code.code} ${code.description} ${code.tableName ?? ""}`.toLocaleLowerCase("pt-BR");
   return fallback.includes(query.toLocaleLowerCase("pt-BR"));
 }
 
-/**
- * Página limitada de códigos para administração e consulta da tabela oficial.
- * Busca textual usa o índice normalizado quando pronto. Filtros sem busca usam
- * igualdade no Firestore quando seguro; vigência e vínculo "linked" permanecem
- * pós-filtros em um scan estritamente limitado a MAX_SCAN_PER_PAGE.
- */
+/** Página limitada do catálogo administrativo. Novas Tabelas TUSS são isoladas por tableKey. */
 export async function listCodeManagementPage(
   db: Db,
   orgId: string,
@@ -125,7 +125,9 @@ export async function listCodeManagementPage(
   const indexStatus = queryText ? await getSearchIndexStatus(db, orgId) : null;
   const candidates = indexStatus?.ready ? searchCandidatePrefixes(queryText) : [];
   const today = clinicalDate();
-  const totalCatalogPromise = orgCollection(db, orgId, "procedureCodes").count().get();
+  const totalCatalogPromise = input.tableKey?.trim()
+    ? orgCollection(db, orgId, "procedureCodes").where("tableKey", "==", input.tableKey.trim()).count().get()
+    : orgCollection(db, orgId, "procedureCodes").count().get();
 
   let cursor = input.cursor?.trim() || null;
   let scanned = 0;
@@ -134,6 +136,7 @@ export async function listCodeManagementPage(
 
   while (matches.length < limit + 1 && scanned < MAX_SCAN_PER_PAGE && !exhausted) {
     let query = orgCollection(db, orgId, "procedureCodes").orderBy(FieldPath.documentId());
+    if (input.tableKey?.trim()) query = query.where("tableKey", "==", input.tableKey.trim());
     if (queryText && indexStatus?.ready && candidates.length > 0) {
       query = query.where("searchPrefixes", "array-contains-any", candidates);
     } else if (!queryText) {
@@ -182,10 +185,6 @@ export async function listCodeManagementPage(
   };
 }
 
-/**
- * Catálogo canônico para a tabela/resolvedor administrativo. Lê todos os
- * procedimentos (bem menor que TUSS) e apenas códigos que já possuem vínculo.
- */
 export async function listProcedureAdminCatalog(db: Db, orgId: string): Promise<Procedure[]> {
   const procedureSnapshot = await orgCollection(db, orgId, "procedures").get();
   const ids = procedureSnapshot.docs.map((doc) => doc.id);
