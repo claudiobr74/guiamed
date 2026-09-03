@@ -107,7 +107,45 @@ export default async function GuiasPage({
         />
       ) : (
         <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
-          <div className="overflow-x-auto">
+          <ul className="divide-y divide-[#e2e8f0] md:hidden">
+            {requests.map((req) => {
+              const primaryCid = req.cids[0];
+              const primaryProcedure = req.items[0];
+              const patientName = req.patient?.fullName ?? "paciente sem nome";
+              const isDraft = req.status === "draft";
+
+              return (
+                <li key={req.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-bold text-[#0f172a]">{req.patient?.fullName ?? "—"}</p>
+                      <p className="mt-1 truncate text-[12px] text-[#475569]">{req.institution?.name ?? "Instituição não informada"}</p>
+                    </div>
+                    <Badge tone={statusTone(req.status)}>{statusLabel(req.status)}</Badge>
+                  </div>
+
+                  <dl className="mt-4 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[12px]">
+                    <dt className="text-[#64748b]">Diagnóstico</dt>
+                    <dd className="min-w-0 font-medium text-[#0f172a]">
+                      {primaryCid ? `CID ${primaryCid.codeSnapshot}${req.cids.length > 1 ? ` +${req.cids.length - 1}` : ""}` : req.diagnosis || "—"}
+                    </dd>
+                    <dt className="text-[#64748b]">Procedimento</dt>
+                    <dd className="min-w-0 truncate font-medium text-[#0f172a]" title={primaryProcedure?.procedureName}>
+                      {primaryProcedure?.procedureName ?? "—"}{req.items.length > 1 ? ` +${req.items.length - 1}` : ""}
+                    </dd>
+                    <dt className="text-[#64748b]">Médico</dt>
+                    <dd className="min-w-0 truncate font-medium text-[#0f172a]">{req.doctor?.name ?? "—"}</dd>
+                    <dt className="text-[#64748b]">Criada em</dt>
+                    <dd className="font-medium text-[#0f172a]">{new Date(req.createdAt).toLocaleDateString("pt-BR")}</dd>
+                  </dl>
+
+                  <RequestActions requestId={req.id} patientName={patientName} isDraft={isDraft} mobile />
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1120px] text-left text-[12px]">
               <thead className="bg-[#f8fafc] text-[10px] uppercase text-[#475569]">
                 <tr>
@@ -144,34 +182,7 @@ export default async function GuiasPage({
                         <Badge tone={statusTone(req.status)}>{statusLabel(req.status)}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Link
-                            className="inline-flex size-8 items-center justify-center rounded-md text-[#1e5fa6] hover:bg-[#eff6ff]"
-                            href={`/guias/${req.id}`}
-                            aria-label={isDraft ? `Continuar guia de ${patientName}` : `Abrir guia de ${patientName}`}
-                            title={isDraft ? "Continuar edição" : "Abrir guia"}
-                          >
-                            {isDraft ? <PencilLine size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
-                          </Link>
-                          <Link
-                            className="inline-flex size-8 items-center justify-center rounded-md text-[#475569] hover:bg-[#f1f5f9] hover:text-[#1e5fa6]"
-                            href={`/guias/${req.id}/preview`}
-                            aria-label={`Visualizar PDF da guia de ${patientName}`}
-                            title="Visualizar PDF"
-                          >
-                            <FileText size={15} aria-hidden="true" />
-                          </Link>
-                          <form action={duplicateRequestAction.bind(null, req.id)}>
-                            <button
-                              className="inline-flex size-8 items-center justify-center rounded-md text-[#475569] hover:bg-[#f1f5f9] hover:text-[#1e5fa6]"
-                              type="submit"
-                              aria-label={`Duplicar guia de ${patientName}`}
-                              title="Duplicar guia"
-                            >
-                              <Copy size={15} aria-hidden="true" />
-                            </button>
-                          </form>
-                        </div>
+                        <RequestActions requestId={req.id} patientName={patientName} isDraft={isDraft} />
                       </td>
                     </tr>
                   );
@@ -193,5 +204,82 @@ export default async function GuiasPage({
         </div>
       )}
     </AppShell>
+  );
+}
+
+function RequestActions({
+  requestId,
+  patientName,
+  isDraft,
+  mobile = false,
+}: {
+  requestId: string;
+  patientName: string;
+  isDraft: boolean;
+  mobile?: boolean;
+}) {
+  if (mobile) {
+    const actionClassName = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#e2e8f0] px-3 text-[12px] font-semibold text-[#475569] hover:bg-[#f8fafc] hover:text-[#1e5fa6]";
+    return (
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Link
+          className={`${actionClassName} col-span-2 border-[#bfdbfe] bg-[#eff6ff] text-[#1e5fa6]`}
+          href={`/guias/${requestId}`}
+          aria-label={isDraft ? `Continuar guia de ${patientName}` : `Abrir guia de ${patientName}`}
+        >
+          {isDraft ? <PencilLine size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+          {isDraft ? "Continuar" : "Abrir"}
+        </Link>
+        <Link
+          className={actionClassName}
+          href={`/guias/${requestId}/preview`}
+          aria-label={`Visualizar PDF da guia de ${patientName}`}
+        >
+          <FileText size={15} aria-hidden="true" />
+          PDF
+        </Link>
+        <form action={duplicateRequestAction.bind(null, requestId)}>
+          <button
+            className={`${actionClassName} w-full`}
+            type="submit"
+            aria-label={`Duplicar guia de ${patientName}`}
+          >
+            <Copy size={15} aria-hidden="true" />
+            Duplicar
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-end gap-1">
+      <Link
+        className="inline-flex size-8 items-center justify-center rounded-md text-[#1e5fa6] hover:bg-[#eff6ff]"
+        href={`/guias/${requestId}`}
+        aria-label={isDraft ? `Continuar guia de ${patientName}` : `Abrir guia de ${patientName}`}
+        title={isDraft ? "Continuar edição" : "Abrir guia"}
+      >
+        {isDraft ? <PencilLine size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+      </Link>
+      <Link
+        className="inline-flex size-8 items-center justify-center rounded-md text-[#475569] hover:bg-[#f1f5f9] hover:text-[#1e5fa6]"
+        href={`/guias/${requestId}/preview`}
+        aria-label={`Visualizar PDF da guia de ${patientName}`}
+        title="Visualizar PDF"
+      >
+        <FileText size={15} aria-hidden="true" />
+      </Link>
+      <form action={duplicateRequestAction.bind(null, requestId)}>
+        <button
+          className="inline-flex size-8 items-center justify-center rounded-md text-[#475569] hover:bg-[#f1f5f9] hover:text-[#1e5fa6]"
+          type="submit"
+          aria-label={`Duplicar guia de ${patientName}`}
+          title="Duplicar guia"
+        >
+          <Copy size={15} aria-hidden="true" />
+        </button>
+      </form>
+    </div>
   );
 }
