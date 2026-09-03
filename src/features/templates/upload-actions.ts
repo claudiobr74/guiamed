@@ -62,6 +62,9 @@ function safeUploadError(error: unknown): string {
     "Muitas tentativas",
   ];
   if (safePrefixes.some((prefix) => message.startsWith(prefix))) return message;
+  if (message.includes("bucket provisionado")) {
+    return "O Cloud Storage do Firebase ainda não está provisionado para este projeto. Ative o Storage no Firebase e tente novamente.";
+  }
   if (message.includes("Firebase Storage")) {
     return "Não foi possível acessar o armazenamento privado do Firebase. Verifique a configuração do Storage na Vercel.";
   }
@@ -225,23 +228,17 @@ export async function completeTemplateUploadAction(
     const user = await requireAdmin();
     const session = await withOrganizationContext(user.organizationId, user.id, async (db) => {
       const ref = orgCollection(db, user.organizationId, "templateUploadSessions").doc(sessionId);
-      let resolved: TemplateUploadSession | null = null;
-      await db.runTransaction(async (transaction) => {
+      return db.runTransaction<TemplateUploadSession>(async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists) throw new Error("Upload de PDF não encontrado.");
         const current = mapSession(snapshot.id, snapshot.data() ?? {});
         if (current.createdBy !== user.id) throw new Error("Upload de PDF não encontrado.");
-        if (current.status === "completed" && current.templateVersionId) {
-          resolved = current;
-          return;
-        }
+        if (current.status === "completed" && current.templateVersionId) return current;
         if (current.status !== "uploading") throw new Error("Upload de PDF não está mais ativo.");
         if (templateUploadSessionExpired(current.expiresAt)) throw new Error("Upload de PDF expirou. Envie o arquivo novamente.");
         transaction.set(ref, { status: "assembling", assemblingAt: new Date().toISOString() }, { merge: true });
-        resolved = { ...current, status: "assembling" };
+        return { ...current, status: "assembling" };
       });
-      if (!resolved) throw new Error("Upload de PDF não encontrado.");
-      return resolved;
     });
 
     if (session.status === "completed" && session.templateVersionId) {
