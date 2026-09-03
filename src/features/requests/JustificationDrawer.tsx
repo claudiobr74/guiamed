@@ -58,7 +58,7 @@ export function JustificationDrawer({
         </button>
       </div>
       <p className="rounded-lg bg-[#f8fafc] px-3 py-2 text-[12px] text-[#475569]">
-        O GuiaMed organiza apenas os fatos informados abaixo. Este gerador não usa IA nem cria informações clínicas por inferência.
+        A LizaCare organiza apenas os fatos informados abaixo. Este gerador não usa IA nem cria informações clínicas por inferência.
       </p>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
         <Field label="Sintomas">
