@@ -80,6 +80,17 @@ export interface HealthInsurer {
   active: boolean;
 }
 
+export interface TussCodeTable {
+  id: string;
+  key: string;
+  name: string;
+  currentVersion: string;
+  sourceFilename: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Procedure {
   id: string;
   organizationId: string;
@@ -102,6 +113,9 @@ export interface ProcedureCode {
   validUntil: string | null;
   version: string;
   active: boolean;
+  /** Tabela TUSS de origem. Novos códigos sempre possuem esta identificação. */
+  tableKey?: string | null;
+  tableName?: string | null;
   /** Operadora específica, quando o código não for geral. */
   healthInsurerId: string | null;
   /** Quantidade sugerida ao incluir este código. Legado sem campo equivale a 1. */
@@ -252,6 +266,9 @@ export interface SurgicalRequest {
   healthInsurerId: string | null;
   templateId: string | null;
   templateVersionId: string | null;
+  /** Escolha manual da tabela utilizada nesta solicitação. */
+  tussTableKey?: string | null;
+  tussTableName?: string | null;
   diagnosis: string | null;
   clinicalJustification: string | null;
   clinicalNotes: string | null;
