@@ -5,9 +5,15 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { SEMANTIC_FIELDS, suggestSemanticField } from "@/lib/mapping-suggest";
+import {
+  isMapperArrowKey,
+  moveMappingByKeyboard,
+  resizeMappingByKeyboard,
+} from "@/lib/pdf/mapper-keyboard";
 import type { AcroFormField, FieldMapping, PdfRepeater, RepeaterColumn, TemplateVersion } from "@/types/domain";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { saveMappingsAction, saveRepeatersAction } from "@/features/templates/actions";
@@ -163,6 +169,65 @@ export function PdfMapper({
     setMappings((current) => current.map((mapping) => (mapping.id === id ? { ...mapping, ...partial } : mapping)));
   }
 
+  function addKeyboardMapping() {
+    const width = Math.min(180, Math.max(40, pageSize.w - 48));
+    const height = Math.min(36, Math.max(16, pageSize.h - 48));
+    const mapping: FieldMapping = {
+      id: crypto.randomUUID(),
+      templateVersionId: version.id,
+      semanticField: semantic,
+      pdfFieldName: null,
+      mappingKind: "overlay",
+      page,
+      x: Math.max(0, (pageSize.w - width) / 2),
+      y: Math.max(0, Math.min(pageSize.h - height, pageSize.h * 0.35)),
+      width,
+      height,
+      fontSize: 10,
+      alignment: "left",
+      multiline: false,
+      autoShrink: true,
+      maxCharacters: null,
+      required: false,
+    };
+    setMappings((current) => [...current, mapping]);
+    setSelected(mapping.id);
+    setSelectedRepeater(null);
+    setStatus(`Campo ${semantic} criado na página ${page}. Use as setas para posicionar.`);
+  }
+
+  function onMappingKeyDown(event: ReactKeyboardEvent<HTMLElement>, mapping: FieldMapping) {
+    if (!isMapperArrowKey(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = moveMappingByKeyboard(
+      mapping,
+      event.key,
+      event.shiftKey ? 10 : 1,
+      pageSize.w,
+      pageSize.h,
+    );
+    setSelected(mapping.id);
+    setSelectedRepeater(null);
+    patchMapping(mapping.id, next);
+  }
+
+  function onResizeKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, mapping: FieldMapping) {
+    if (!isMapperArrowKey(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = resizeMappingByKeyboard(
+      mapping,
+      event.key,
+      event.shiftKey ? 10 : 1,
+      pageSize.w,
+      pageSize.h,
+    );
+    setSelected(mapping.id);
+    setSelectedRepeater(null);
+    patchMapping(mapping.id, next);
+  }
+
   function startTransform(
     e: ReactPointerEvent<HTMLElement>,
     mapping: FieldMapping,
@@ -312,7 +377,9 @@ export function PdfMapper({
           <Button variant="secondary" type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}>Página anterior</Button>
           <span>Página {page} / {version.pageCount}</span>
           <Button variant="secondary" type="button" onClick={() => setPage((p) => Math.min(version.pageCount, p + 1))}>Próxima</Button>
-          <span className="ml-auto text-[11px] text-[#64748b]">Arraste no PDF para criar • arraste um campo para mover • use o canto para redimensionar</span>
+          <span id="pdf-mapper-keyboard-help" className="ml-auto max-w-[560px] text-[11px] text-[#64748b]">
+            Ponteiro: arraste para criar, mover e redimensionar. Teclado: use “Adicionar campo sem desenhar”; setas movem o campo; no botão de redimensionar, setas ajustam o tamanho; Shift altera 10 pt.
+          </span>
         </div>
         <div className="relative inline-block">
           <canvas
@@ -327,9 +394,15 @@ export function PdfMapper({
             .map((mapping) => (
               <div
                 key={mapping.id}
-                role="button"
+                role="group"
                 tabIndex={0}
                 aria-label={`Campo ${mapping.semanticField}`}
+                aria-describedby="pdf-mapper-keyboard-help"
+                onFocus={() => {
+                  setSelected(mapping.id);
+                  setSelectedRepeater(null);
+                }}
+                onKeyDown={(event) => onMappingKeyDown(event, mapping)}
                 onClick={(event) => {
                   event.stopPropagation();
                   setSelected(mapping.id);
@@ -339,7 +412,7 @@ export function PdfMapper({
                 onPointerMove={moveTransform}
                 onPointerUp={endTransform}
                 onPointerCancel={endTransform}
-                className={`absolute touch-none border-2 text-left text-[10px] ${selected === mapping.id ? "border-[#1e5fa6] bg-[#1e5fa6]/20" : "border-emerald-500 bg-emerald-500/10"}`}
+                className={`absolute touch-none border-2 text-left text-[10px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e5fa6] ${selected === mapping.id ? "border-[#1e5fa6] bg-[#1e5fa6]/20" : "border-emerald-500 bg-emerald-500/10"}`}
                 style={{
                   left: mapping.x * sx,
                   top: mapping.y * sy,
@@ -351,11 +424,13 @@ export function PdfMapper({
                 <button
                   type="button"
                   aria-label={`Redimensionar ${mapping.semanticField}`}
+                  aria-describedby="pdf-mapper-keyboard-help"
+                  onKeyDown={(event) => onResizeKeyDown(event, mapping)}
                   onPointerDown={(event) => startTransform(event, mapping, "resize")}
                   onPointerMove={moveTransform}
                   onPointerUp={endTransform}
                   onPointerCancel={endTransform}
-                  className="absolute -bottom-1 -right-1 size-3 touch-none rounded-sm bg-[#1e5fa6]"
+                  className="absolute -bottom-1 -right-1 size-3 touch-none rounded-sm bg-[#1e5fa6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f172a]"
                 />
               </div>
             ))}
@@ -396,9 +471,12 @@ export function PdfMapper({
               )),
             )}
           </Select>
-          <p className="mt-2 text-[12px] text-[#475569]">Selecione o campo e desenhe sua área no PDF com mouse, toque ou Apple Pencil.</p>
+          <p className="mt-2 text-[12px] text-[#475569]">
+            Desenhe a área no PDF com mouse, toque ou Apple Pencil, ou use o botão abaixo para criar um campo centralizado e posicioná-lo integralmente pelo teclado.
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" onClick={() => void save()}>Salvar tudo</Button>
+            <Button type="button" variant="secondary" onClick={addKeyboardMapping}>Adicionar campo sem desenhar</Button>
             <Button type="button" variant="secondary" onClick={addRepeater}>Nova região de procedimentos</Button>
           </div>
           {status ? <p role="status" className={`mt-2 text-[12px] ${status.startsWith("Não foi possível") ? "text-[#dc2626]" : "text-[#166534]"}`}>{status}</p> : null}
