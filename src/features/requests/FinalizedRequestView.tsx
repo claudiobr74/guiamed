@@ -125,7 +125,7 @@ export function FinalizedRequestView({
         </dl>
       </Card>
 
-      <Modal open={showCancel} onClose={() => !busy && setShowCancel(false)}>
+      <Modal open={showCancel} onClose={() => !busy && setShowCancel(false)} ariaLabel="Cancelar guia finalizada">
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-[18px] font-bold">Cancelar guia finalizada?</h2>

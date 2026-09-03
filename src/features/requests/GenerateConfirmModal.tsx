@@ -69,7 +69,7 @@ export function GenerateConfirmModal({
   const allIpasgo = request.items.length > 0 && request.items.every((item) => Boolean(item.ipasgoCodeSnapshot));
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} ariaLabel="Revisão final da guia">
       <div className="flex max-h-[80vh] flex-col gap-5 overflow-y-auto">
         <div className="flex items-center justify-between gap-3">
           <div>

@@ -24,13 +24,14 @@ export function LoginForm() {
             </Field>
             <div className="flex w-full flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-semibold text-[#475569]">Senha</label>
+                <label htmlFor="login-password" className="text-[12px] font-semibold text-[#475569]">Senha</label>
                 <Link href="/recuperar-senha" className="text-[12px] font-medium text-[#1e5fa6]">
                   Esqueci minha senha
                 </Link>
               </div>
               <div className="relative">
                 <Input
+                  id="login-password"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
@@ -48,7 +49,7 @@ export function LoginForm() {
               </div>
             </div>
           </div>
-          {state?.error ? <p className="mt-4 text-[12px] text-[#dc2626]">{state.error}</p> : null}
+          {state?.error ? <p role="alert" className="mt-4 text-[12px] text-[#dc2626]">{state.error}</p> : null}
           <Button type="submit" className="mt-5 w-full text-[14px]" disabled={pending}>
             {pending ? "Entrando…" : "Entrar"}
           </Button>

@@ -1,5 +1,7 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { Children, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Icon, type IconName } from "@/components/icons";
+
+export { Modal } from "@/components/Modal";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -72,10 +74,15 @@ export function Label({ children }: { children: ReactNode }) {
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
+  const [control, ...supportingContent] = Children.toArray(children);
+
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <Label>{label}</Label>
-      {children}
+    <div className="flex w-full flex-col">
+      <label className="flex w-full flex-col gap-1.5">
+        <span className="text-[12px] font-semibold text-[#475569]">{label}</span>
+        {control}
+      </label>
+      {supportingContent}
     </div>
   );
 }
@@ -128,38 +135,6 @@ export function EmptyState({
       <p className="mt-6 text-[16px] font-bold text-[#0f172a]">{title}</p>
       <p className="mt-2 max-w-[300px] text-[13px] text-[#475569]">{description}</p>
       {action ? <div className="mt-6">{action}</div> : null}
-    </div>
-  );
-}
-
-export function Modal({
-  open,
-  onClose,
-  children,
-  widthClassName = "w-[560px]",
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-  widthClassName?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className={cn(
-          "max-h-[90vh] overflow-auto rounded-2xl bg-white p-8 shadow-[0_16px_16px_rgba(0,0,0,0.1)]",
-          widthClassName,
-        )}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {children}
-      </div>
     </div>
   );
 }

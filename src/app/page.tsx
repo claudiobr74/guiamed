@@ -69,32 +69,34 @@ export default async function DashboardPage() {
               }
             />
           ) : (
-            <table className="w-full text-left text-[13px]">
-              <thead className="text-[11px] uppercase text-[#94a3b8]">
-                <tr>
-                  <th className="pb-2 font-semibold">Paciente</th>
-                  <th className="pb-2 font-semibold">Convênio</th>
-                  <th className="pb-2 font-semibold">Procedimento</th>
-                  <th className="pb-2 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((req) => (
-                  <tr key={req.id} className="border-t border-[#e2e8f0]">
-                    <td className="py-3">
-                      <Link href={`/guias/${req.id}`} className="font-semibold text-[#1e5fa6]">
-                        {req.patient?.fullName ?? "Sem paciente"}
-                      </Link>
-                    </td>
-                    <td className="py-3 text-[#475569]">{req.healthInsurer?.name ?? "—"}</td>
-                    <td className="py-3 text-[#475569]">{req.items[0]?.procedureName ?? "—"}</td>
-                    <td className="py-3">
-                      <Badge tone={statusTone(req.status)}>{statusLabel(req.status)}</Badge>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-[13px]">
+                <thead className="text-[11px] uppercase text-[#94a3b8]">
+                  <tr>
+                    <th className="pb-2 font-semibold">Paciente</th>
+                    <th className="pb-2 font-semibold">Convênio</th>
+                    <th className="pb-2 font-semibold">Procedimento</th>
+                    <th className="pb-2 font-semibold">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recent.map((req) => (
+                    <tr key={req.id} className="border-t border-[#e2e8f0]">
+                      <td className="py-3">
+                        <Link href={`/guias/${req.id}`} className="font-semibold text-[#1e5fa6]">
+                          {req.patient?.fullName ?? "Sem paciente"}
+                        </Link>
+                      </td>
+                      <td className="py-3 text-[#475569]">{req.healthInsurer?.name ?? "—"}</td>
+                      <td className="py-3 text-[#475569]">{req.items[0]?.procedureName ?? "—"}</td>
+                      <td className="py-3">
+                        <Badge tone={statusTone(req.status)}>{statusLabel(req.status)}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
         <section className="rounded-xl border border-[#e2e8f0] bg-white p-5">

@@ -45,9 +45,9 @@ export default async function GuiasPage({
         </form>
       }
     >
-      <form className="mb-4 flex gap-3">
-        <input name="q" defaultValue={params.q} placeholder="Paciente, médico, instituição ou procedimento" className="h-10 flex-1 rounded-lg border border-[#e2e8f0] px-3 text-[13px]" />
-        <select name="status" defaultValue={params.status ?? ""} className="h-10 rounded-lg border border-[#e2e8f0] px-3 text-[13px]">
+      <form className="mb-4 flex flex-col gap-3 sm:flex-row">
+        <input aria-label="Buscar guias" name="q" defaultValue={params.q} placeholder="Paciente, médico, instituição ou procedimento" className="h-10 min-w-0 flex-1 rounded-lg border border-[#e2e8f0] px-3 text-[13px]" />
+        <select aria-label="Filtrar por status" name="status" defaultValue={params.status ?? ""} className="h-10 rounded-lg border border-[#e2e8f0] px-3 text-[13px]">
           <option value="">Todos</option>
           <option value="draft">Rascunho</option>
           <option value="finalized">Finalizada</option>
@@ -80,42 +80,44 @@ export default async function GuiasPage({
         />
       ) : (
         <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
-          <table className="w-full text-left text-[13px]">
-            <thead className="bg-[#f8fafc] text-[11px] uppercase text-[#94a3b8]">
-              <tr>
-                <th className="px-4 py-3">Paciente</th>
-                <th className="px-4 py-3">Médico</th>
-                <th className="px-4 py-3">Instituição</th>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((req) => (
-                <tr key={req.id} className="border-t border-[#e2e8f0]">
-                  <td className="px-4 py-3 font-semibold">{req.patient?.fullName ?? "—"}</td>
-                  <td className="px-4 py-3">{req.doctor?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{req.institution?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{new Date(req.createdAt).toLocaleDateString("pt-BR")}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={req.status === "finalized" ? "green" : req.status === "cancelled" ? "red" : "neutral"}>
-                      {req.status === "finalized" ? "Gerada" : req.status === "cancelled" ? "Cancelada" : "Rascunho"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-3">
-                      <Link className="text-[#1e5fa6]" href={`/guias/${req.id}`}>Abrir</Link>
-                      <Link className="text-[#1e5fa6]" href={`/guias/${req.id}/preview`}>PDF</Link>
-                      <form action={duplicateRequestAction.bind(null, req.id)}>
-                        <button className="text-[#1e5fa6]" type="submit">Duplicar</button>
-                      </form>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-[13px]">
+              <thead className="bg-[#f8fafc] text-[11px] uppercase text-[#94a3b8]">
+                <tr>
+                  <th className="px-4 py-3">Paciente</th>
+                  <th className="px-4 py-3">Médico</th>
+                  <th className="px-4 py-3">Instituição</th>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {requests.map((req) => (
+                  <tr key={req.id} className="border-t border-[#e2e8f0]">
+                    <td className="px-4 py-3 font-semibold">{req.patient?.fullName ?? "—"}</td>
+                    <td className="px-4 py-3">{req.doctor?.name ?? "—"}</td>
+                    <td className="px-4 py-3">{req.institution?.name ?? "—"}</td>
+                    <td className="px-4 py-3">{new Date(req.createdAt).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={req.status === "finalized" ? "green" : req.status === "cancelled" ? "red" : "neutral"}>
+                        {req.status === "finalized" ? "Gerada" : req.status === "cancelled" ? "Cancelada" : "Rascunho"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-3">
+                        <Link className="text-[#1e5fa6]" href={`/guias/${req.id}`}>Abrir</Link>
+                        <Link className="text-[#1e5fa6]" href={`/guias/${req.id}/preview`}>PDF</Link>
+                        <form action={duplicateRequestAction.bind(null, req.id)}>
+                          <button className="text-[#1e5fa6]" type="submit">Duplicar</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {page.nextCursor ? (
             <div className="flex justify-end border-t border-[#e2e8f0] p-4">
               <Link

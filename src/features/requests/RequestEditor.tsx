@@ -262,12 +262,14 @@ export function RequestEditor({
     <div className="flex items-start gap-0">
     <div className="flex min-w-0 flex-1 flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ol className="flex flex-wrap items-center gap-4">
+        <ol className="flex w-full items-center gap-4 overflow-x-auto pb-1 xl:w-auto">
           {STEPS.map((label, index) => (
             <li key={label} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setStep(index)}
+                aria-current={index === step ? "step" : undefined}
+                aria-label={`Etapa ${index + 1}: ${label}`}
                 className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${
                   index === step ? "bg-[#1e5fa6] text-white" : index < step ? "bg-[#16a34a] text-white" : "bg-[#f1f5f9] text-[#475569]"
                 }`}
@@ -280,8 +282,8 @@ export function RequestEditor({
             </li>
           ))}
         </ol>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-[#94a3b8]">
+        <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto">
+          <span role="status" aria-live="polite" className="text-[12px] text-[#64748b]">
             {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : ""}
           </span>
           <Button variant="secondary" type="button" onClick={() => void persist()} disabled={request.status !== "draft"}>
@@ -315,7 +317,7 @@ export function RequestEditor({
           )}
         </div>
       </div>
-      {saveError ? <p className="rounded-lg bg-[#fee2e2] px-3 py-2 text-[13px] text-[#dc2626]">{saveError}</p> : null}
+      {saveError ? <p role="alert" className="rounded-lg bg-[#fee2e2] px-3 py-2 text-[13px] text-[#dc2626]">{saveError}</p> : null}
       {templateNotice ? <p role="status" className="rounded-lg bg-[#fff7ed] px-3 py-2 text-[13px] text-[#b45309]">{templateNotice}</p> : null}
 
       {step === 0 ? (
@@ -323,7 +325,7 @@ export function RequestEditor({
           <Card>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[14px] font-bold">Paciente</h2>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button type="button" className="text-[12px] font-semibold text-[#1e5fa6]" onClick={() => patch({ patientId: null, patient: null })}>
                   Trocar paciente
                 </button>
@@ -360,14 +362,14 @@ export function RequestEditor({
                 </ul>
               </Field>
             ) : (
-              <div className="flex items-center justify-between rounded-lg bg-[#eff6ff] p-4">
+              <div className="flex flex-col gap-3 rounded-lg bg-[#eff6ff] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[14px] font-bold text-[#1e5fa6]">{selectedPatient?.fullName}</p>
                   <p className="text-[12px] text-[#475569]">
                     Nascimento: {selectedPatient?.birthDate ?? "—"} • CPF: {selectedPatient?.cpf ?? "—"}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <p className="text-[13px] font-semibold">Convênio: {selectedPatient?.healthInsurerName ?? "—"}</p>
                   <p className="text-[11px] text-[#475569]">Carteirinha: {selectedPatient?.insuranceCard ?? "—"}</p>
                 </div>
@@ -428,7 +430,7 @@ export function RequestEditor({
               </Select>
             </Field>
             {selectedDoctor ? (
-              <div className="mt-4 flex gap-8 text-[13px]">
+              <div className="mt-4 flex flex-wrap gap-8 text-[13px]">
                 <div>
                   <p className="text-[11px] text-[#94a3b8]">REGISTRO CRM</p>
                   <p className="font-semibold">CRM {selectedDoctor.crm} - {selectedDoctor.crmState}</p>
@@ -502,7 +504,7 @@ export function RequestEditor({
 
       {step === 2 ? (
         <Card>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h2 className="text-[14px] font-bold">Procedimentos solicitados</h2>
               <Badge tone="blue">{request.items.length} selecionados</Badge>
@@ -512,6 +514,7 @@ export function RequestEditor({
             </Button>
           </div>
           <Input
+            aria-label="Buscar procedimento, TUSS ou código IPASGO"
             value={procQuery}
             placeholder="Buscar procedimento, TUSS ou código IPASGO..."
             onChange={(e) => {
@@ -564,51 +567,53 @@ export function RequestEditor({
               ))}
             </ul>
           ) : null}
-          <table className="mt-4 w-full text-left text-[13px]">
-            <thead className="text-[11px] uppercase text-[#94a3b8]">
-              <tr>
-                <th className="pb-2">Procedimento</th>
-                <th className="pb-2">TUSS</th>
-                <th className="pb-2">IPASGO</th>
-                <th className="pb-2">Quantidade</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {request.items.map((item, index) => (
-                <tr key={item.id} className="border-t border-[#e2e8f0]">
-                  <td className="py-3 font-semibold">{item.procedureName}</td>
-                  <td className="py-3">{item.tussCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
-                  <td className="py-3">{item.ipasgoCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
-                  <td className="py-3">
-                    <QuantityStepper
-                      value={item.quantity}
-                      onChange={(qty) => {
-                        const next = [...request.items];
-                        next[index] = { ...item, quantity: parseQuantity(qty) };
-                        patch({ items: next });
-                      }}
-                    />
-                  </td>
-                  <td className="py-3">
-                    <button
-                      type="button"
-                      className="text-[#dc2626]"
-                      onClick={() => patch({ items: request.items.filter((i) => i.id !== item.id) })}
-                    >
-                      Excluir
-                    </button>
-                  </td>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
+              <thead className="text-[11px] uppercase text-[#94a3b8]">
+                <tr>
+                  <th className="pb-2">Procedimento</th>
+                  <th className="pb-2">TUSS</th>
+                  <th className="pb-2">IPASGO</th>
+                  <th className="pb-2">Quantidade</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {request.items.map((item, index) => (
+                  <tr key={item.id} className="border-t border-[#e2e8f0]">
+                    <td className="py-3 font-semibold">{item.procedureName}</td>
+                    <td className="py-3">{item.tussCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
+                    <td className="py-3">{item.ipasgoCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
+                    <td className="py-3">
+                      <QuantityStepper
+                        value={item.quantity}
+                        onChange={(qty) => {
+                          const next = [...request.items];
+                          next[index] = { ...item, quantity: parseQuantity(qty) };
+                          patch({ items: next });
+                        }}
+                      />
+                    </td>
+                    <td className="py-3">
+                      <button
+                        type="button"
+                        className="text-[#dc2626]"
+                        onClick={() => patch({ items: request.items.filter((i) => i.id !== item.id) })}
+                      >
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       ) : null}
 
       {step === 3 ? (
         <Card>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Icon name="file-text" size={16} />
               <h2 className="text-[14px] font-bold">Justificativa clínica</h2>
