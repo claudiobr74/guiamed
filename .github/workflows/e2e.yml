@@ -69,7 +69,8 @@ jobs:
       - name: Configure Firebase test project
         shell: bash
         run: |
-          PROJECT_ID=$(node -e 'const s=JSON.parse(process.env.E2E_FIREBASE_SERVICE_ACCOUNT); if(!s.project_id) process.exit(2); process.stdout.write(s.project_id)')
+          export PROJECT_ID=$(node -e 'const s=JSON.parse(process.env.E2E_FIREBASE_SERVICE_ACCOUNT); if(!s.project_id) process.exit(2); process.stdout.write(s.project_id)')
+          node --input-type=module -e 'import { assertSafeE2EProject } from "./scripts/e2e-project-guard.mjs"; assertSafeE2EProject({ projectId: process.env.PROJECT_ID, databaseId: process.env.E2E_FIRESTORE_DATABASE_ID, storageBucket: process.env.E2E_FIREBASE_STORAGE_BUCKET });'
           echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_FIREBASE_API_KEY=$E2E_FIREBASE_API_KEY" >> "$GITHUB_ENV"
           echo "FIRESTORE_DATABASE_ID=$E2E_FIRESTORE_DATABASE_ID" >> "$GITHUB_ENV"
@@ -85,7 +86,7 @@ jobs:
           pnpm add --global playwright@1.55.0
           playwright install --with-deps chromium
 
-      - name: Start GuiaMed
+      - name: Start LizaCare
         shell: bash
         run: |
           pnpm dev --hostname 127.0.0.1 > /tmp/guiamed-e2e.log 2>&1 &
