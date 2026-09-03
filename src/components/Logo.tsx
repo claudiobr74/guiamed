@@ -1,6 +1,20 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Icon } from "@/components/icons";
 import { cn } from "@/components/ui";
+
+const SOURCE_SIZE = 1536;
+const VISIBLE_BOUNDS = {
+  x: 241,
+  y: 581,
+  width: 1134,
+  height: 371,
+} as const;
+
+const visibleWidths = {
+  sm: 150,
+  md: 180,
+  lg: 240,
+} as const;
 
 export function Logo({
   href,
@@ -11,23 +25,37 @@ export function Logo({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const box = size === "lg" ? 34 : size === "sm" ? 26 : 26;
-  const icon = size === "lg" ? 18 : 14;
-  const word = size === "lg" ? "text-[24px] font-extrabold" : "text-[18px] font-bold";
+  const visibleWidth = visibleWidths[size];
+  const scale = visibleWidth / VISIBLE_BOUNDS.width;
+  const visibleHeight = VISIBLE_BOUNDS.height * scale;
+  const sourceRenderedSize = SOURCE_SIZE * scale;
+
   const mark = (
-    <span className={cn("flex items-center gap-2", className)}>
-      <span
-        className="flex shrink-0 items-center justify-center rounded-md bg-[#1e5fa6]"
-        style={{ width: box, height: box }}
-      >
-        <Icon name="logo-cross" size={icon} />
-      </span>
-      <span className={cn("text-[#0f172a]", word)}>GuiaMed</span>
+    <span
+      className={cn("relative block shrink-0 overflow-hidden", className)}
+      style={{ width: visibleWidth, height: visibleHeight }}
+    >
+      <Image
+        src="/brand/lizacare-logo.webp"
+        alt="LizaCare — Inteligência que cuida"
+        width={SOURCE_SIZE}
+        height={SOURCE_SIZE}
+        unoptimized
+        priority={size === "lg"}
+        className="absolute max-w-none"
+        style={{
+          width: sourceRenderedSize,
+          height: sourceRenderedSize,
+          left: -VISIBLE_BOUNDS.x * scale,
+          top: -VISIBLE_BOUNDS.y * scale,
+        }}
+      />
     </span>
   );
+
   if (!href) return mark;
   return (
-    <Link href={href} className="inline-flex">
+    <Link href={href} className="inline-flex" aria-label="LizaCare — página inicial">
       {mark}
     </Link>
   );
