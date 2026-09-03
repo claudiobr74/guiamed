@@ -1,0 +1,62 @@
+name: One-shot kit preference patch
+
+on:
+  push:
+    branches:
+      - fix/core-clinical-workflow
+    paths:
+      - .github/workflows/patch-kit-preference.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/core-clinical-workflow
+      - name: Patch RequestEditor kit resolution
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/features/requests/RequestEditor.tsx')
+          text = path.read_text()
+
+          import_anchor = 'import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";\n'
+          import_replacement = import_anchor + 'import { resolveKitItemCodes } from "@/lib/kits/resolve-kit-codes";\n'
+          if text.count(import_anchor) != 1:
+              raise SystemExit(f'Expected exactly one codes import, found {text.count(import_anchor)}')
+          text = text.replace(import_anchor, import_replacement, 1)
+
+          old = '''          const procedure = kitProcedureById.get(item.procedureId);
+          if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
+          const tuss = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+          const ipasgo = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+          return {
+'''
+          new = '''          const procedure = kitProcedureById.get(item.procedureId);
+          if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
+          const { tuss, ipasgo } = resolveKitItemCodes({
+            procedure,
+            item,
+            healthInsurerId: request.healthInsurerId,
+            at: resolutionDate,
+          });
+          return {
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one kit resolution block, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/requests/RequestEditor.tsx
+          git diff --cached --check
+          git commit -m "fix: honor preferred code when applying kits"
+          git push origin HEAD:fix/core-clinical-workflow
