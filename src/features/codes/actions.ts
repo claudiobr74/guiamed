@@ -3,6 +3,7 @@
 import ExcelJS from "exceljs";
 import { requireAdmin } from "@/lib/auth/current";
 import { searchInsurersByName, searchProceduresByName } from "@/lib/db/admin-search";
+import { buildAuditLogDocument, writeAuditLog } from "@/lib/db/audit";
 import { withOrganizationContext, orgCollection } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { getExistingCodesForImportRows } from "@/lib/db/import-lookup";
@@ -133,14 +134,30 @@ export async function importCodesDetailedAction(formData: FormData) {
   }
 
   const result = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const importedVersion = version || validated.rows[0]?.version || "1";
     const imported = await repos.insertCodesIdempotent(db, user.organizationId, user.id, {
       codeSystem: defaultSystem,
-      version: version || validated.rows[0]?.version || "1",
+      version: importedVersion,
       sourceFilename: file.name,
       sourceFormat: format,
       rows: validated.rows,
     });
     await indexImportedProcedureCodes(db, user.organizationId, validated.rows);
+    await writeAuditLog(db, user.organizationId, {
+      userId: user.id,
+      action: "import_procedure_codes",
+      entityType: "import_batch",
+      entityId: imported.batchId,
+      metadata: {
+        codeSystem: defaultSystem,
+        version: importedVersion,
+        sourceFilename: file.name,
+        sourceFormat: format,
+        rowCount: validated.rows.length,
+        inserted: imported.inserted,
+        updated: imported.updated,
+      },
+    });
     return imported;
   });
   return { ok: true as const, ...result };
@@ -182,6 +199,7 @@ export async function saveProcedureCodeLinkAction(data: {
     const codeRef = orgCollection(db, user.organizationId, "procedureCodes").doc(codeId);
     const codeSnap = await codeRef.get();
     if (!codeSnap.exists) throw new Error("Código não encontrado nesta organização.");
+    const previous = codeSnap.data() ?? {};
 
     if (data.procedureId) {
       const procedureSnap = await orgCollection(db, user.organizationId, "procedures").doc(data.procedureId).get();
@@ -199,22 +217,41 @@ export async function saveProcedureCodeLinkAction(data: {
       }
     }
 
-    await codeRef.set(
-      {
-        procedureId: data.procedureId || null,
-        healthInsurerId: data.healthInsurerId || null,
-        defaultQuantity: quantity,
-        updatedAt: new Date().toISOString(),
+    const next = {
+      procedureId: data.procedureId || null,
+      healthInsurerId: data.healthInsurerId || null,
+      defaultQuantity: quantity,
+      updatedAt: new Date().toISOString(),
+    };
+    const auditRef = orgCollection(db, user.organizationId, "auditLogs").doc();
+    const batch = db.batch();
+    batch.set(codeRef, next, { merge: true });
+    batch.set(auditRef, buildAuditLogDocument({
+      userId: user.id,
+      action: "update_procedure_code_link",
+      entityType: "procedure_code",
+      entityId: codeId,
+      metadata: {
+        before: {
+          procedureId: (previous.procedureId as string | null | undefined) ?? null,
+          healthInsurerId: (previous.healthInsurerId as string | null | undefined) ?? null,
+          defaultQuantity: parseQuantity(previous.defaultQuantity),
+        },
+        after: {
+          procedureId: next.procedureId,
+          healthInsurerId: next.healthInsurerId,
+          defaultQuantity: next.defaultQuantity,
+        },
       },
-      { merge: true },
-    );
+    }));
+    await batch.commit();
 
     return {
       ok: true as const,
       codeId,
-      procedureId: data.procedureId || null,
-      healthInsurerId: data.healthInsurerId || null,
-      defaultQuantity: quantity,
+      procedureId: next.procedureId,
+      healthInsurerId: next.healthInsurerId,
+      defaultQuantity: next.defaultQuantity,
     };
   });
 }
