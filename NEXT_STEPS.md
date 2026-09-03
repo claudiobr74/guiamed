@@ -6,7 +6,7 @@ Atualizado em: 2026-09-02
 
 - Base auditada: `origin/cursor/guiamed-app-e951` em `2c14a3d`.
 - Branch de trabalho: `fix/core-clinical-workflow`.
-- Head funcional validado: `107d42d` (`ci: make skipped E2E status explicit`).
+- Head funcional validado: `8668080` (`perf: avoid loading all patients and procedures on guide open`).
 - CI do head: lint PASS; typecheck PASS; testes PASS; build PASS.
 - Deploy Vercel do head: SUCCESS.
 - E2E de navegador: infraestrutura pronta, mas `browser-flow` está explicitamente SKIPPED enquanto os secrets do Firebase de teste não estiverem configurados. Não considerar isso um E2E PASS.
@@ -37,7 +37,8 @@ Atualizado em: 2026-09-02
 - seleção de código de referência por item ou resolução automática;
 - quantidade padrão por item, iniciando em 1 e podendo ser >1;
 - seleção de código sugere a quantidade padrão configurada nesse código;
-- servidor rejeita procedimento inexistente/inativo, duplicação do mesmo procedimento e código que não pertença ao procedimento.
+- servidor rejeita procedimento inexistente/inativo, duplicação do mesmo procedimento e código que não pertença ao procedimento;
+- abertura da guia carrega apenas os procedimentos efetivamente referenciados pelos kits, em lotes, em vez de carregar todo `procedures` + `procedureCodes`.
 
 ### Guia clínica
 
@@ -52,7 +53,10 @@ Atualizado em: 2026-09-02
 - snapshot histórico consolidado de paciente, médico, instituição, convênio, template, códigos, quantidades e CID;
 - finalização compara revisão monotônica e `updatedAt`;
 - teste integrado cobre entrada adulterada → catálogo confiável → código por convênio → CID/template → gate de finalização;
-- teste integrado rejeita tentativa de forçar código específico de outro convênio.
+- teste integrado rejeita tentativa de forçar código específico de outro convênio;
+- busca clínica de paciente, CID e procedimento usa debounce de 250 ms e mínimo de 2 caracteres;
+- respostas assíncronas antigas são ignoradas, evitando resultado de busca fora de ordem;
+- abrir a guia não carrega mais todos os pacientes: paciente já selecionado vem hidratado na solicitação e novas buscas são feitas sob demanda.
 
 ### Segurança de documentos
 
@@ -88,7 +92,8 @@ Atualizado em: 2026-09-02
 ## Próxima tarefa exata
 
 1. Configurar os seis secrets do Firebase de teste e obter o primeiro E2E de navegador realmente executado: `E2E_FIREBASE_SERVICE_ACCOUNT`, `E2E_FIREBASE_API_KEY`, `E2E_FIRESTORE_DATABASE_ID`, `E2E_FIREBASE_STORAGE_BUCKET`, `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`.
-2. Continuar a escalabilidade: paginação/busca server-side nas demais telas e debounce/cancelamento das buscas de paciente, CID e procedimentos.
+2. Substituir as buscas server-side que ainda fazem varredura de coleção por busca seletiva/indexada, especialmente `searchPatients` e `searchProcedures`.
+3. Expandir paginação para telas administrativas/listas que ainda carregam coleções completas.
 
 ## Pendências
 
@@ -100,9 +105,9 @@ Atualizado em: 2026-09-02
 
 - estratégia de fonte Unicode embarcada para caracteres fora de WinAnsi sem corromper dados clínicos;
 - ampliar suporte AcroForm além de text fields quando o formulário real exigir checkbox/radio/dropdown;
+- substituir busca de paciente/procedimento baseada em varredura por índices/campos normalizados, preservando compatibilidade com registros legados;
 - expandir paginação server-side para telas que ainda carregam coleções completas;
 - busca indexada para catálogos grandes;
-- debounce/cancelamento de buscas de paciente, CID e procedimentos;
 - upload robusto com limites explícitos, hash verificado e rate limiting;
 - validar política de overflow por template para casos com mais procedimentos que a capacidade do formulário.
 
@@ -122,4 +127,6 @@ Atualizado em: 2026-09-02
 - `f6fe8c5` — seed Firebase determinístico para E2E;
 - `9203366` / `13f32a2` — runner do fluxo E2E autenticado e ajuste de lint;
 - `121a79f` / `107d42d` — workflow E2E e status SKIPPED explícito quando não configurado;
-- `71ee2c0` / `06c6f9a` — paginação server-side do catálogo TUSS/IPASGO.
+- `71ee2c0` / `06c6f9a` — paginação server-side do catálogo TUSS/IPASGO;
+- `cf15146` — debounce/cancelamento das buscas clínicas;
+- `6dd4231` / `8668080` — carregamento seletivo de procedimentos dos kits e remoção do preload integral de pacientes/procedimentos ao abrir uma guia.
