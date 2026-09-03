@@ -21,6 +21,15 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+        env:
+          PDF_FIXTURE_OUTPUT_DIR: artifacts/pdf-fixtures
+      - name: Publish synthetic PDF fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-fixtures-${{ github.event.pull_request.number || github.sha }}
+          path: artifacts/pdf-fixtures
+          if-no-files-found: error
+          retention-days: 14
       - run: pnpm build
         env:
           SESSION_SECRET: ci-session-secret
