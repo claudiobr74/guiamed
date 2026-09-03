@@ -2,10 +2,15 @@
 
 import ExcelJS from "exceljs";
 import { requireAdmin } from "@/lib/auth/current";
+import { searchInsurersByName, searchProceduresByName } from "@/lib/db/admin-search";
 import { withOrganizationContext, orgCollection } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { getExistingCodesForImportRows } from "@/lib/db/import-lookup";
-import { indexImportedProcedureCodes } from "@/lib/db/indexed-search";
+import {
+  getSearchIndexStatus,
+  indexImportedProcedureCodes,
+  searchProceduresIndexed,
+} from "@/lib/db/indexed-search";
 import { parseQuantity } from "@/lib/quantity";
 import { buildImportPreview } from "@/lib/import-preview";
 import {
@@ -15,6 +20,8 @@ import {
   validateImportRows,
   type ImportRow,
 } from "@/lib/import-codes";
+
+const MIN_SEARCH_LENGTH = 2;
 
 async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format: "csv" | "xlsx" | "json" }> {
   const name = file.name.toLowerCase();
@@ -137,6 +144,27 @@ export async function importCodesDetailedAction(formData: FormData) {
     return imported;
   });
   return { ok: true as const, ...result };
+}
+
+export async function searchCodeProceduresAction(query: string) {
+  const user = await requireAdmin();
+  const value = query.trim();
+  if (value.length < MIN_SEARCH_LENGTH) return [];
+  return withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const status = await getSearchIndexStatus(db, user.organizationId);
+    return status.ready
+      ? searchProceduresIndexed(db, user.organizationId, value)
+      : searchProceduresByName(db, user.organizationId, value);
+  });
+}
+
+export async function searchCodeInsurersAction(query: string) {
+  const user = await requireAdmin();
+  const value = query.trim();
+  if (value.length < MIN_SEARCH_LENGTH) return [];
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
+    searchInsurersByName(db, user.organizationId, value),
+  );
 }
 
 export async function saveProcedureCodeLinkAction(data: {
