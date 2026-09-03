@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium, request } = require("playwright");
 
 function required(name) {
