@@ -10,11 +10,15 @@ const PAGE_LIMIT_MAX = 100;
 const SCAN_BATCH_SIZE = 200;
 const MAX_SCAN_PER_PAGE = 2000;
 const IN_QUERY_LIMIT = 30;
+const CLINICAL_TIME_ZONE = "America/Sao_Paulo";
 
 export interface CodeManagementFilters {
   q?: string | null;
   system?: "ALL" | "TUSS" | "IPASGO" | null;
   linkState?: "all" | "linked" | "unlinked" | null;
+  activeState?: "all" | "active" | "inactive" | null;
+  validity?: "all" | "current" | "future" | "expired" | null;
+  version?: string | null;
   cursor?: string | null;
   limit?: number;
 }
@@ -23,6 +27,7 @@ export interface CodeManagementPage {
   items: ProcedureCode[];
   nextCursor: string | null;
   scanned: number;
+  totalCatalog: number;
   searchIndexed: boolean;
   scanLimitReached: boolean;
 }
@@ -58,25 +63,56 @@ function mapProcedure(orgId: string, id: string, data: DocumentData, codes: Proc
   };
 }
 
-function matchesFilters(code: ProcedureCode, data: DocumentData, input: CodeManagementFilters): boolean {
+function clinicalDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CLINICAL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
+
+function matchesValidity(code: ProcedureCode, state: CodeManagementFilters["validity"], today: string): boolean {
+  if (!state || state === "all") return true;
+  if (state === "future") return Boolean(code.validFrom && code.validFrom > today);
+  if (state === "expired") return Boolean(code.validUntil && code.validUntil < today);
+  return (!code.validFrom || code.validFrom <= today) && (!code.validUntil || code.validUntil >= today);
+}
+
+function matchesFilters(
+  code: ProcedureCode,
+  data: DocumentData,
+  input: CodeManagementFilters,
+  today: string,
+): boolean {
   const system = input.system ?? "ALL";
-  const linkState = input.linkState ?? "unlinked";
+  const linkState = input.linkState ?? "all";
+  const activeState = input.activeState ?? "all";
+  const version = input.version?.trim() ?? "";
+
   if (system !== "ALL" && code.codeSystem !== system) return false;
   if (linkState === "linked" && !code.procedureId) return false;
   if (linkState === "unlinked" && code.procedureId) return false;
+  if (activeState === "active" && !code.active) return false;
+  if (activeState === "inactive" && code.active) return false;
+  if (version && code.version.toLocaleLowerCase("pt-BR") !== version.toLocaleLowerCase("pt-BR")) return false;
+  if (!matchesValidity(code, input.validity, today)) return false;
 
   const query = input.q?.trim();
   if (!query) return true;
   const indexedText = String(data.searchText ?? "");
   if (indexedText && matchesIndexedSearch(indexedText, query)) return true;
-  const fallback = `${code.code} ${code.description}`.toLowerCase();
-  return fallback.includes(query.toLowerCase());
+  const fallback = `${code.code} ${code.description}`.toLocaleLowerCase("pt-BR");
+  return fallback.includes(query.toLocaleLowerCase("pt-BR"));
 }
 
 /**
- * Página limitada de códigos para o gerenciador administrativo.
- * Com índice pronto, a busca textual usa `searchPrefixes`; sem índice, o
- * fallback continua correto, mas varre no máximo MAX_SCAN_PER_PAGE documentos.
+ * Página limitada de códigos para administração e consulta da tabela oficial.
+ * Busca textual usa o índice normalizado quando pronto. Filtros sem busca usam
+ * igualdade no Firestore quando seguro; vigência e vínculo "linked" permanecem
+ * pós-filtros em um scan estritamente limitado a MAX_SCAN_PER_PAGE.
  */
 export async function listCodeManagementPage(
   db: Db,
@@ -88,6 +124,8 @@ export async function listCodeManagementPage(
   const queryText = input.q?.trim() ?? "";
   const indexStatus = queryText ? await getSearchIndexStatus(db, orgId) : null;
   const candidates = indexStatus?.ready ? searchCandidatePrefixes(queryText) : [];
+  const today = clinicalDate();
+  const totalCatalogPromise = orgCollection(db, orgId, "procedureCodes").count().get();
 
   let cursor = input.cursor?.trim() || null;
   let scanned = 0;
@@ -98,6 +136,12 @@ export async function listCodeManagementPage(
     let query = orgCollection(db, orgId, "procedureCodes").orderBy(FieldPath.documentId());
     if (queryText && indexStatus?.ready && candidates.length > 0) {
       query = query.where("searchPrefixes", "array-contains-any", candidates);
+    } else if (!queryText) {
+      if (input.system && input.system !== "ALL") query = query.where("codeSystem", "==", input.system);
+      if (input.activeState === "active") query = query.where("active", "==", true);
+      if (input.activeState === "inactive") query = query.where("active", "==", false);
+      if (input.version?.trim()) query = query.where("version", "==", input.version.trim());
+      if (input.linkState === "unlinked") query = query.where("procedureId", "==", null);
     }
     query = query.limit(Math.min(SCAN_BATCH_SIZE, MAX_SCAN_PER_PAGE - scanned));
     if (cursor) query = query.startAfter(cursor);
@@ -111,13 +155,14 @@ export async function listCodeManagementPage(
     scanned += snapshot.size;
     for (const doc of snapshot.docs) {
       const code = mapCode(doc.id, doc.data());
-      if (matchesFilters(code, doc.data(), input)) matches.push({ code, id: doc.id });
+      if (matchesFilters(code, doc.data(), input, today)) matches.push({ code, id: doc.id });
       if (matches.length >= limit + 1) break;
     }
 
     const last = snapshot.docs[snapshot.docs.length - 1]?.id ?? null;
     cursor = last;
-    exhausted = snapshot.size < Math.min(SCAN_BATCH_SIZE, MAX_SCAN_PER_PAGE - (scanned - snapshot.size));
+    const requestedBatchSize = Math.min(SCAN_BATCH_SIZE, MAX_SCAN_PER_PAGE - (scanned - snapshot.size));
+    exhausted = snapshot.size < requestedBatchSize;
   }
 
   const visible = matches.slice(0, limit);
@@ -125,11 +170,13 @@ export async function listCodeManagementPage(
   const nextCursor = hasKnownNext
     ? (matches.length > limit ? visible[visible.length - 1]?.id ?? cursor : cursor)
     : null;
+  const totalCatalog = (await totalCatalogPromise).data().count;
 
   return {
     items: visible.map((item) => item.code),
     nextCursor,
     scanned,
+    totalCatalog,
     searchIndexed: Boolean(indexStatus?.ready),
     scanLimitReached: scanned >= MAX_SCAN_PER_PAGE && matches.length <= limit && !exhausted,
   };
