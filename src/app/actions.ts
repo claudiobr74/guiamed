@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids, searchCid10 } from "@/lib/cid10/catalog";
 import { withOrganizationContext } from "@/lib/db/client";
+import { getExistingCodesForImportRows } from "@/lib/db/import-lookup";
 import {
   getSearchIndexStatus,
   indexImportedProcedureCodes,
@@ -231,7 +232,9 @@ export async function previewImportCodesAction(formData: FormData) {
   if (validated.issues.length > 0) {
     return { ok: false as const, issues: validated.issues };
   }
-  const existing = await withOrganizationContext(user.organizationId, user.id, (db) => repos.listCodes(db, user.organizationId));
+  const existing = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    getExistingCodesForImportRows(db, user.organizationId, validated.rows),
+  );
   const diff = summarizeImportDiff(validated.rows, existing);
   return {
     ok: true as const,
