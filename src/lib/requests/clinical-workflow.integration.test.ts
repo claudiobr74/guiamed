@@ -196,7 +196,7 @@ describe("fluxo clínico integrado", () => {
         {
           id: "mapping-cid",
           templateVersionId: version.id,
-          semanticField: "cid.primary.code",
+          semanticField: "request.cid",
           pdfFieldName: null,
           mappingKind: "overlay",
           page: 1,
