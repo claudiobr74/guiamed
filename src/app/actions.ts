@@ -16,6 +16,7 @@ import {
   upsertPatientIndexed,
   upsertProcedureIndexed,
 } from "@/lib/db/indexed-search";
+import { saveDraftWithTargetedCatalog } from "@/lib/db/request-write";
 import * as repos from "@/lib/db/repos";
 import { summarizeImportDiff } from "@/lib/import-diff";
 import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRow } from "@/lib/import-codes";
@@ -150,7 +151,9 @@ export async function saveRequestAction(request: SurgicalRequest) {
     ...request,
     cids: normalizeRequestCids(request.cids, request.id),
   };
-  const saved = await withOrganizationContext(user.organizationId, user.id, (db) => repos.saveDraft(db, user, normalizedRequest));
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    saveDraftWithTargetedCatalog(db, user, normalizedRequest),
+  );
   return { ok: true as const, ...saved };
 }
 
