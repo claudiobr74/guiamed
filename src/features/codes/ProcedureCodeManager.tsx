@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveProcedureCodeLinkAction } from "@/features/codes/actions";
 import { Badge, Button, Input, Select } from "@/components/ui";
@@ -15,79 +15,33 @@ export function ProcedureCodeManager({
   procedures: Procedure[];
   insurers: HealthInsurer[];
 }) {
-  const [query, setQuery] = useState("");
-  const [system, setSystem] = useState("ALL");
-  const [linkState, setLinkState] = useState("unlinked");
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return codes.filter((code) => {
-      if (system !== "ALL" && code.codeSystem !== system) return false;
-      if (linkState === "unlinked" && code.procedureId) return false;
-      if (linkState === "linked" && !code.procedureId) return false;
-      if (!needle) return true;
-      const procedure = procedures.find((item) => item.id === code.procedureId);
-      return `${code.code} ${code.description} ${procedure?.name ?? ""}`.toLowerCase().includes(needle);
-    });
-  }, [codes, procedures, query, system, linkState]);
-
-  const visible = filtered.slice(0, 200);
+  if (codes.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-[#cbd5e1] p-8 text-center text-[13px] text-[#64748b]">
+        Nenhum código corresponde aos filtros atuais.
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3 rounded-lg bg-[#f8fafc] p-3">
-        <div className="min-w-[240px] flex-1">
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Buscar código ou descrição</label>
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ex.: 31403019 ou artrodese" />
-        </div>
-        <div className="w-[150px]">
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Sistema</label>
-          <Select value={system} onChange={(event) => setSystem(event.target.value)}>
-            <option value="ALL">Todos</option>
-            <option value="TUSS">TUSS</option>
-            <option value="IPASGO">IPASGO</option>
-          </Select>
-        </div>
-        <div className="w-[170px]">
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-[#64748b]">Vínculo</label>
-          <Select value={linkState} onChange={(event) => setLinkState(event.target.value)}>
-            <option value="unlinked">Sem vínculo</option>
-            <option value="linked">Vinculados</option>
-            <option value="all">Todos</option>
-          </Select>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-[12px] text-[#64748b]">
-        <span>{filtered.length} código(s) encontrado(s)</span>
-        {filtered.length > visible.length ? <span>Mostrando os primeiros {visible.length}</span> : null}
-      </div>
-
-      {visible.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-[#cbd5e1] p-8 text-center text-[13px] text-[#64748b]">
-          Nenhum código corresponde aos filtros atuais.
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-[1120px] w-full text-left text-[12px]">
-            <thead className="text-[10px] uppercase text-[#94a3b8]">
-              <tr>
-                <th className="pb-2 pr-3">Código</th>
-                <th className="pb-2 pr-3">Descrição</th>
-                <th className="pb-2 pr-3">Procedimento canônico</th>
-                <th className="pb-2 pr-3">Convênio / operadora</th>
-                <th className="pb-2 pr-3">Qtd. padrão</th>
-                <th className="pb-2">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((code) => (
-                <CodeLinkRow key={code.id} code={code} procedures={procedures} insurers={insurers} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="overflow-x-auto">
+      <table className="min-w-[1120px] w-full text-left text-[12px]">
+        <thead className="text-[10px] uppercase text-[#94a3b8]">
+          <tr>
+            <th className="pb-2 pr-3">Código</th>
+            <th className="pb-2 pr-3">Descrição</th>
+            <th className="pb-2 pr-3">Procedimento canônico</th>
+            <th className="pb-2 pr-3">Convênio / operadora</th>
+            <th className="pb-2 pr-3">Qtd. padrão</th>
+            <th className="pb-2">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {codes.map((code) => (
+            <CodeLinkRow key={code.id} code={code} procedures={procedures} insurers={insurers} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
