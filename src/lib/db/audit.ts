@@ -9,17 +9,21 @@ export interface AuditLogInput {
   metadata?: Record<string, unknown>;
 }
 
-export async function writeAuditLog(
-  db: Db,
-  organizationId: string,
-  input: AuditLogInput,
-): Promise<void> {
-  await orgCollection(db, organizationId, "auditLogs").add({
+export function buildAuditLogDocument(input: AuditLogInput) {
+  return {
     userId: input.userId,
     action: input.action,
     entityType: input.entityType,
     entityId: input.entityId,
     metadata: input.metadata ?? {},
     createdAt: new Date().toISOString(),
-  });
+  };
+}
+
+export async function writeAuditLog(
+  db: Db,
+  organizationId: string,
+  input: AuditLogInput,
+): Promise<void> {
+  await orgCollection(db, organizationId, "auditLogs").add(buildAuditLogDocument(input));
 }
