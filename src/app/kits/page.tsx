@@ -3,14 +3,17 @@ import { Card, EmptyState } from "@/components/ui";
 import { KitEditor } from "@/features/kits/KitEditor";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
-import { listKits, listProcedures } from "@/lib/db/repos";
+import { listProcedureAdminCatalog } from "@/lib/db/code-management-page";
+import { listKits } from "@/lib/db/repos";
 import { CODE_NOT_FOUND } from "@/types/domain";
 
 export default async function KitsPage() {
   const user = await requirePageAdmin();
   const { kits, procedures } = await withOrganizationContext(user.organizationId, user.id, async (db) => ({
     kits: await listKits(db, user.organizationId),
-    procedures: await listProcedures(db, user.organizationId),
+    // O editor precisa apenas dos procedimentos e códigos já vinculados a eles;
+    // não há motivo para ler o catálogo TUSS/IPASGO inteiro, inclusive desvinculados.
+    procedures: await listProcedureAdminCatalog(db, user.organizationId),
   }));
   const procedureById = new Map(procedures.map((procedure) => [procedure.id, procedure]));
 
