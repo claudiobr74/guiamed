@@ -1,10 +1,38 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { uploadTemplateAction } from "@/app/actions";
 import { requireAdmin } from "@/lib/auth/current";
+import { searchInstitutionsByName, searchInsurersByName } from "@/lib/db/admin-search";
 import { withOrganizationContext } from "@/lib/db/client";
 import * as repos from "@/lib/db/repos";
 import { validateRepeaterForTemplate } from "@/lib/pdf/mapping-validation";
 import type { PdfRepeater } from "@/types/domain";
+
+const MIN_SEARCH_LENGTH = 2;
+
+export async function searchTemplateInstitutionsAction(query: string) {
+  const user = await requireAdmin();
+  const value = query.trim();
+  if (value.length < MIN_SEARCH_LENGTH) return [];
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
+    searchInstitutionsByName(db, user.organizationId, value),
+  );
+}
+
+export async function searchTemplateInsurersAction(query: string) {
+  const user = await requireAdmin();
+  const value = query.trim();
+  if (value.length < MIN_SEARCH_LENGTH) return [];
+  return withOrganizationContext(user.organizationId, user.id, (db) =>
+    searchInsurersByName(db, user.organizationId, value),
+  );
+}
+
+export async function uploadTemplateAndRedirectAction(formData: FormData): Promise<void> {
+  const result = await uploadTemplateAction(formData);
+  redirect(`/templates/${result.versionId}/mapper`);
+}
 
 export async function saveRepeatersAction(
   versionId: string,
