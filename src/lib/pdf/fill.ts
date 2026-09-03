@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { OverflowError, assertProcedureOverflow } from "@/lib/overflow";
-import { clipText, fitFontSize, topLeftToPdfLib } from "@/lib/pdf/coords";
+import { clipText, topLeftToPdfLib } from "@/lib/pdf/coords";
 import type { FieldMapping, PdfRepeater, SurgicalRequest } from "@/types/domain";
 
 export interface FillPdfInput {
@@ -72,6 +72,74 @@ function getSemanticValue(request: SurgicalRequest, semantic: string): string {
   }
 }
 
+function widthAt(font: PDFFont, text: string, size: number): number {
+  return font.widthOfTextAtSize(text, size);
+}
+
+function fitMeasuredFontSize(input: {
+  font: PDFFont;
+  text: string;
+  maxWidth: number;
+  fontSize: number;
+  autoShrink: boolean;
+  minSize?: number;
+}): number {
+  if (!input.autoShrink || !input.text) return input.fontSize;
+  const width = widthAt(input.font, input.text, input.fontSize);
+  if (width <= input.maxWidth) return input.fontSize;
+  const scaled = input.fontSize * (input.maxWidth / Math.max(width, 1));
+  return Math.max(input.minSize ?? 6, scaled);
+}
+
+function clipLineToWidth(text: string, font: PDFFont, size: number, maxWidth: number): string {
+  if (widthAt(font, text, size) <= maxWidth) return text;
+  const ellipsis = "...";
+  if (widthAt(font, ellipsis, size) > maxWidth) return "";
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const candidate = `${text.slice(0, mid)}${ellipsis}`;
+    if (widthAt(font, candidate, size) <= maxWidth) low = mid;
+    else high = mid - 1;
+  }
+  return `${text.slice(0, low).trimEnd()}${ellipsis}`;
+}
+
+function wrapLines(text: string, maxWidth: number, fontSize: number, font: PDFFont): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    if (!paragraph.trim()) {
+      lines.push("");
+      continue;
+    }
+    const words = paragraph.trim().split(/\s+/);
+    let current = "";
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      if (widthAt(font, next, fontSize) <= maxWidth) {
+        current = next;
+        continue;
+      }
+      if (current) lines.push(current);
+      if (widthAt(font, word, fontSize) <= maxWidth) {
+        current = word;
+      } else {
+        lines.push(clipLineToWidth(word, font, fontSize, maxWidth));
+        current = "";
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
+}
+
+function alignedX(mapping: FieldMapping, lineWidth: number): number {
+  if (mapping.alignment === "center") return mapping.x + Math.max(0, (mapping.width - lineWidth) / 2);
+  if (mapping.alignment === "right") return mapping.x + Math.max(0, mapping.width - lineWidth);
+  return mapping.x;
+}
+
 function drawMappedText(
   page: PDFPage,
   font: PDFFont,
@@ -87,44 +155,31 @@ function drawMappedText(
     height: mapping.height,
     pageHeightPt: pageHeight,
   });
-  const size = fitFontSize({
-    text: value,
+  const size = fitMeasuredFontSize({
+    font,
+    text: mapping.multiline ? value.split(/\r?\n/).reduce((longest, line) => widthAt(font, line, mapping.fontSize) > widthAt(font, longest, mapping.fontSize) ? line : longest, "") : value,
     maxWidth: mapping.width,
     fontSize: mapping.fontSize,
     autoShrink: mapping.autoShrink,
   });
-  const lines = mapping.multiline ? wrapLines(value, mapping.width, size) : [value];
+  const rawLines = mapping.multiline ? wrapLines(value, mapping.width, size, font) : [clipLineToWidth(value, font, size, mapping.width)];
   const lineHeight = size + 2;
+  const maxLines = Math.max(1, Math.floor(mapping.height / lineHeight));
+  const lines = rawLines.slice(0, maxLines);
+
   lines.forEach((line, i) => {
+    if (!line) return;
     const y = origin.y + mapping.height - lineHeight * (i + 1);
     if (y < origin.y) return;
+    const lineWidth = widthAt(font, line, size);
     page.drawText(line, {
-      x: origin.x,
+      x: alignedX(mapping, lineWidth),
       y,
       size,
       font,
       color: rgb(0.06, 0.09, 0.16),
-      maxWidth: mapping.width,
     });
   });
-}
-
-function wrapLines(text: string, maxWidth: number, fontSize: number): string[] {
-  const factor = 0.55;
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length * fontSize * factor > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }
 
 export function validateRequestForPdf(request: SurgicalRequest, mappings: FieldMapping[]): string[] {

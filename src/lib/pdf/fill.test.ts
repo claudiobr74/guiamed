@@ -109,6 +109,28 @@ describe("PDF e overflow", () => {
     expect(filled.bytes.byteLength).toBeGreaterThan(bytes.length / 2);
   });
 
+  it("usa métricas reais em texto longo, com alinhamento e acentos latinos", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = {
+      ...clinicalRequest.patient!,
+      fullName: "João da Conceição — Nome Clínico Muito Extenso Para Campo Estreito",
+    };
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: clinicalRequest,
+      mappings: [
+        { ...simpleMapping, width: 90, alignment: "center", autoShrink: true },
+        { ...simpleMapping, y: 80, width: 90, alignment: "right", autoShrink: false },
+      ],
+      repeaters: [],
+    });
+    const out = await PDFDocument.load(filled.bytes);
+    expect(out.getPageCount()).toBe(1);
+    expect(filled.bytes.byteLength).toBeGreaterThan(0);
+  });
+
   it("multiline", async () => {
     const pdf = await PDFDocument.create();
     pdf.addPage([400, 600]);
