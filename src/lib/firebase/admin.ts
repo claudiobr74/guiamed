@@ -101,16 +101,23 @@ export async function withFirebaseBucket<T>(
   operation: (bucket: ReturnType<typeof firebaseBucket>) => Promise<T>,
 ): Promise<T> {
   const names = firebaseStorageBucketNames();
-  let lastError: unknown = null;
+  let missingBucketError: unknown = null;
   for (let index = 0; index < names.length; index += 1) {
     try {
       return await operation(firebaseBucket(names[index]));
     } catch (error) {
-      lastError = error;
-      if (!isMissingBucketError(error) || index === names.length - 1) throw error;
+      if (!isMissingBucketError(error)) throw error;
+      missingBucketError = error;
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Firebase Storage indisponível.");
+
+  console.error("Nenhum bucket Firebase Storage configurado foi encontrado", {
+    candidates: names,
+    error: missingBucketError instanceof Error ? missingBucketError.message : String(missingBucketError),
+  });
+  throw new Error(
+    "Firebase Storage não possui um bucket provisionado para este projeto. Ative o Cloud Storage no Firebase e confira NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET na Vercel.",
+  );
 }
 
 export function firebaseReadyMessage(): string {
