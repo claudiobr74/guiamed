@@ -22,9 +22,9 @@ describe("cidInformationalWarnings", () => {
     }));
   });
 
-  it("não avisa restrição quando o sexo cadastrado é compatível ou não binário", () => {
+  it("não avisa restrição quando o sexo cadastrado é compatível ou indeterminado", () => {
     expect(cidInformationalWarnings(cid, "M")).toEqual([]);
-    expect(cidInformationalWarnings(cid, "O")).toEqual([]);
+    expect(cidInformationalWarnings(cid, "I")).toEqual([]);
     expect(cidInformationalWarnings(cid, null)).toEqual([]);
   });
 

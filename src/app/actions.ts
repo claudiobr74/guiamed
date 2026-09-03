@@ -31,6 +31,13 @@ import { parseQuantity } from "@/lib/quantity";
 import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import { deleteObject, putObject } from "@/lib/storage";
+import {
+  parseDoctorInput,
+  parseInsurerInput,
+  parseInstitutionInput,
+  parsePatientInput,
+  parseProcedureInput,
+} from "@/lib/validation/domain";
 import type {
   Doctor,
   FieldMapping,
@@ -43,51 +50,91 @@ import type {
 
 export async function savePatientAction(data: Partial<Patient> & { fullName: string; id?: string }) {
   const user = await requireUser();
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    upsertPatientIndexed(db, user.organizationId, user.id, data),
+  const parsed = parsePatientInput(data);
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    upsertPatientIndexed(db, user.organizationId, user.id, parsed),
   );
+  revalidatePath("/pacientes");
+  return saved;
 }
 
 export async function saveDoctorAction(
   data: Partial<Doctor> & { name: string; crm: string; crmState: string; id?: string },
 ) {
   const user = await requireUser();
-  return withOrganizationContext(user.organizationId, user.id, (db) => repos.upsertDoctor(db, user.organizationId, data));
+  const parsed = parseDoctorInput(data);
+  const saved = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const existing = parsed.id ? await repos.getDoctor(db, user.organizationId, parsed.id) : null;
+    return repos.upsertDoctor(db, user.organizationId, {
+      ...parsed,
+      signatureFile: existing?.signatureFile ?? null,
+      signatureKind: existing?.signatureKind ?? "image",
+    });
+  });
+  revalidatePath("/medicos");
+  if (parsed.id) revalidatePath(`/medicos/${parsed.id}`);
+  return saved;
 }
 
 export async function saveInstitutionAction(data: {
   id?: string;
   name: string;
   kind: InstitutionKind;
-  city?: string;
-  state?: string;
-  cnpj?: string;
-  phone?: string;
+  city?: string | null;
+  state?: string | null;
+  cnpj?: string | null;
+  phone?: string | null;
+  active?: boolean;
 }) {
   const user = await requireAdmin();
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.upsertInstitution(db, user.organizationId, data),
+  const parsed = parseInstitutionInput(data);
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    repos.upsertInstitution(db, user.organizationId, {
+      ...parsed,
+      city: parsed.city ?? undefined,
+      state: parsed.state ?? undefined,
+      cnpj: parsed.cnpj ?? undefined,
+      phone: parsed.phone ?? undefined,
+    }),
   );
+  revalidatePath("/instituicoes");
+  return saved;
 }
 
-export async function saveInsurerAction(data: { id?: string; name: string; code?: string }) {
+export async function saveInsurerAction(data: { id?: string; name: string; code?: string | null; active?: boolean }) {
   const user = await requireAdmin();
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.upsertInsurer(db, user.organizationId, data),
+  const parsed = parseInsurerInput(data);
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    repos.upsertInsurer(db, user.organizationId, {
+      ...parsed,
+      code: parsed.code ?? undefined,
+    }),
   );
+  revalidatePath("/instituicoes");
+  return saved;
 }
 
 export async function saveProcedureAction(data: {
   id?: string;
   name: string;
-  description?: string;
-  specialty?: string;
+  description?: string | null;
+  specialty?: string | null;
+  category?: string | null;
   synonyms?: string[];
+  active?: boolean;
 }) {
   const user = await requireAdmin();
-  return withOrganizationContext(user.organizationId, user.id, (db) =>
-    upsertProcedureIndexed(db, user.organizationId, data),
+  const parsed = parseProcedureInput(data);
+  const saved = await withOrganizationContext(user.organizationId, user.id, (db) =>
+    upsertProcedureIndexed(db, user.organizationId, {
+      ...parsed,
+      description: parsed.description ?? undefined,
+      specialty: parsed.specialty ?? undefined,
+      category: parsed.category ?? undefined,
+    }),
   );
+  revalidatePath("/procedimentos");
+  return saved;
 }
 
 export async function saveKitAction(data: {
@@ -294,7 +341,6 @@ export async function uploadTemplateAction(formData: FormData) {
   const file = formData.get("file");
   if (!(file instanceof File)) throw new Error("Envie um PDF.");
 
-  // Valide metadados antes de alocar o arquivo inteiro em memória.
   validatePdfUploadMetadata({ name: file.name, type: file.type, size: file.size });
   await withOrganizationContext(user.organizationId, user.id, (db) =>
     assertRateLimit(db, user.organizationId, {
