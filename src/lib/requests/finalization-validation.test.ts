@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateRequestForFinalization } from "@/lib/requests/finalization-validation";
-import type { DocumentTemplate, SurgicalRequest, TemplateVersion } from "@/types/domain";
+import type { DocumentTemplate, FieldMapping, SurgicalRequest, TemplateVersion } from "@/types/domain";
 
 const request = {
   id: "request-1", organizationId: "org-1", patientId: "patient-1", doctorId: "doctor-1", institutionId: "institution-1", healthInsurerId: "insurer-1", templateId: "template-1", templateVersionId: "version-1", diagnosis: null, clinicalJustification: "Justificativa revisada.", clinicalNotes: null, status: "draft", revision: 0, createdBy: "user-1", createdAt: "2026-09-02T00:00:00Z", updatedAt: "2026-09-02T00:00:00Z", finalizedAt: null, duplicatedFromId: null,
@@ -13,6 +13,27 @@ const request = {
 const template = { id: "template-1", organizationId: "org-1", name: "Template", institutionId: "institution-1", healthInsurerId: "insurer-1", documentType: "request", active: true } satisfies DocumentTemplate;
 const version = { id: "version-1", templateId: "template-1", version: 1, filePath: "pdf-templates/org-1/template.pdf", fileHash: "hash", pageCount: 1, pageWidth: 1, pageHeight: 1, hasAcroform: false, acroformFields: [], active: true, createdAt: request.createdAt, createdBy: "user-1" } satisfies TemplateVersion;
 
+function requiredMapping(semanticField: string): FieldMapping {
+  return {
+    id: `map-${semanticField}`,
+    templateVersionId: version.id,
+    semanticField,
+    pdfFieldName: null,
+    mappingKind: "overlay",
+    page: 1,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 20,
+    fontSize: 10,
+    alignment: "left",
+    multiline: false,
+    autoShrink: true,
+    maxCharacters: null,
+    required: true,
+  };
+}
+
 describe("validação de finalização", () => {
   it("aceita uma guia coerente", () => expect(validateRequestForFinalization({ request, template, version, mappings: [], repeaters: [] }).filter((issue) => issue.severity === "error")).toEqual([]));
   it("bloqueia template de outra instituição", () => expect(validateRequestForFinalization({ request, template: { ...template, institutionId: "other" }, version, mappings: [], repeaters: [] }).some((issue) => issue.code === "TEMPLATE_INCOMPATIBLE")).toBe(true));
@@ -20,6 +41,32 @@ describe("validação de finalização", () => {
     const invalid = { ...request, items: [{ ...request.items[0], quantity: 0, tussCodeSnapshot: null, ipasgoCodeSnapshot: null }] };
     const issues = validateRequestForFinalization({ request: invalid, template, version, mappings: [], repeaters: [{ id: "r", templateVersionId: version.id, source: "procedures", page: 1, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [{ field: "tussCode", x: 0, width: 50 }, { field: "ipasgoCode", x: 50, width: 50 }] }] });
     expect(issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["INVALID_QUANTITY", "TUSS_REQUIRED", "IPASGO_REQUIRED"]));
+  });
+
+  it("bloqueia mapping individual TUSS obrigatório antes do renderer", () => {
+    const invalid = {
+      ...request,
+      items: [{ ...request.items[0], tussCodeSnapshot: null }],
+    };
+    const issues = validateRequestForFinalization({
+      request: invalid,
+      template,
+      version,
+      mappings: [requiredMapping("procedures[0].tuss")],
+      repeaters: [],
+    });
+    expect(issues).toContainEqual(expect.objectContaining({ code: "TUSS_REQUIRED", itemId: "item-1", severity: "error" }));
+  });
+
+  it("bloqueia assinatura quando o template a marca como obrigatória", () => {
+    const issues = validateRequestForFinalization({
+      request,
+      template,
+      version,
+      mappings: [requiredMapping("signature.image")],
+      repeaters: [],
+    });
+    expect(issues).toContainEqual(expect.objectContaining({ code: "SIGNATURE_REQUIRED", severity: "error" }));
   });
 
   it("soma a capacidade dos repeaters configurados para continuação", () => {
