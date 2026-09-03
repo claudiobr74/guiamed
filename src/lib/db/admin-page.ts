@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { FieldPath, type DocumentData, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
-import type { Doctor, HealthInsurer, Institution, InstitutionKind } from "@/types/domain";
+import type { Doctor, HealthInsurer, Institution, InstitutionKind, ProcedureKit } from "@/types/domain";
 
 export interface AdminPage<T> {
   items: T[];
@@ -127,4 +127,34 @@ export async function listInsurersPage(
       active: data.active !== false,
     } satisfies HealthInsurer;
   }, input);
+}
+
+function mapKit(orgId: string, id: string, data: DocumentData): ProcedureKit {
+  return {
+    id,
+    organizationId: orgId,
+    name: String(data.name ?? ""),
+    description: (data.description as string | null) ?? null,
+    specialty: (data.specialty as string | null) ?? null,
+    active: data.active !== false,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
+}
+
+export async function listKitsPage(
+  db: Db,
+  orgId: string,
+  input: { cursor?: string | null; limit?: number } = {},
+): Promise<AdminPage<ProcedureKit>> {
+  return listNamedPage(db, orgId, "kits", (doc) => mapKit(orgId, doc.id, doc.data()), input);
+}
+
+export async function getKit(
+  db: Db,
+  orgId: string,
+  id: string,
+): Promise<ProcedureKit | null> {
+  const snapshot = await orgCollection(db, orgId, "kits").doc(id).get();
+  if (!snapshot.exists) return null;
+  return mapKit(orgId, snapshot.id, snapshot.data() ?? {});
 }
