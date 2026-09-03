@@ -3,6 +3,7 @@ import { FinalizedRequestView } from "@/features/requests/FinalizedRequestView";
 import { RequestEditor } from "@/features/requests/RequestEditor";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
+import { getLatestGeneratedDocument } from "@/lib/db/generated-documents";
 import { listProceduresByIds } from "@/lib/db/procedure-lookup";
 import { hydrateRequestDirect } from "@/lib/db/request-hydration";
 import { getTemplate, getTemplateVersion, listDoctors, listInstitutions, listInsurers, listKits, listTemplates } from "@/lib/db/repos";
@@ -16,9 +17,10 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
       const request = await hydrateRequestDirect(db, user.organizationId, id);
 
       if (request.status !== "draft") {
-        const [template, version] = await Promise.all([
+        const [template, version, generatedDocument] = await Promise.all([
           request.templateId ? getTemplate(db, user.organizationId, request.templateId) : Promise.resolve(null),
           request.templateVersionId ? getTemplateVersion(db, user.organizationId, request.templateVersionId) : Promise.resolve(null),
+          getLatestGeneratedDocument(db, user.organizationId, request.id),
         ]);
         return {
           request,
@@ -29,6 +31,7 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
           kits: [],
           kitProcedures: [],
           selectedTemplate: template ? { ...template, currentVersion: version } : null,
+          finalizedSnapshot: generatedDocument?.requestSnapshot ?? null,
         };
       }
 
@@ -50,6 +53,7 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
         kits,
         kitProcedures,
         selectedTemplate: templates.find((template) => template.id === request.templateId) ?? null,
+        finalizedSnapshot: null,
       };
     } catch {
       return null;
@@ -71,7 +75,11 @@ export default async function GuiaPage({ params }: { params: Promise<{ id: strin
           kitProcedures={data.kitProcedures}
         />
       ) : (
-        <FinalizedRequestView request={data.request} template={data.selectedTemplate} />
+        <FinalizedRequestView
+          request={data.request}
+          template={data.selectedTemplate}
+          snapshot={data.finalizedSnapshot}
+        />
       )}
     </AppShell>
   );
