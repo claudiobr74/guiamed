@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { PencilLine } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { saveInstitutionAction, saveInsurerAction } from "@/features/admin/actions";
 import { requirePageAdmin } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
@@ -40,119 +41,187 @@ export default async function InstituicoesPage({
   const insurers = insurerPage.items;
 
   return (
-    <AppShell user={user} title="Instituições e convênios">
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="flex flex-col gap-5">
-          <Card>
-            <h2 className="mb-3 text-[14px] font-bold">Nova instituição</h2>
-            <InstitutionForm />
-          </Card>
-          {institutions.length === 0 && !institutionCursor ? (
-            <EmptyState title="Nenhuma instituição" description="Cadastre hospital ou clínica separadamente do convênio/operadora." />
-          ) : (
-            <Card>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-[14px] font-bold">Hospitais, clínicas e instituições</h2>
-                  <p className="mt-1 text-[11px] text-[#64748b]">Até 50 cadastros por página, em ordem alfabética.</p>
-                </div>
-                {institutionCursor ? (
-                  <Link
-                    href={pageHref({ insurerCursor })}
-                    className="text-[11px] font-semibold text-[#1e5fa6]"
-                  >
-                    Voltar ao início
-                  </Link>
-                ) : null}
-              </div>
-              {institutions.length === 0 ? (
-                <p className="py-6 text-center text-[13px] text-[#64748b]">Não há mais instituições nesta paginação.</p>
-              ) : (
-                <div className="space-y-2">
-                  {institutions.map((institution) => (
-                    <details key={institution.id} className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
-                      <summary className="cursor-pointer list-none text-[13px] font-semibold">
-                        <span>{institution.name}</span>
-                        <span className="ml-2 text-[11px] font-normal text-[#64748b]">
-                          {KIND_LABEL[institution.kind]} • {institution.active ? "ativo" : "inativo"}
-                        </span>
-                      </summary>
-                      <div className="mt-3 border-t border-[#e2e8f0] pt-3">
-                        <InstitutionForm institution={institution} />
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              )}
-              {institutionPage.nextCursor ? (
-                <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
-                  <Link
-                    href={pageHref({ institutionCursor: institutionPage.nextCursor, insurerCursor })}
-                    className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
-                  >
-                    Próximas 50 instituições
-                  </Link>
-                </div>
-              ) : null}
-            </Card>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-5">
-          <Card>
-            <h2 className="mb-3 text-[14px] font-bold">Novo convênio / operadora</h2>
-            <InsurerForm />
-          </Card>
-          <Card>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-[14px] font-bold">Convênios / operadoras de saúde</h2>
-                <p className="mt-1 text-[11px] text-[#64748b]">Até 50 cadastros por página, em ordem alfabética.</p>
-              </div>
-              {insurerCursor ? (
-                <Link
-                  href={pageHref({ institutionCursor })}
-                  className="text-[11px] font-semibold text-[#1e5fa6]"
-                >
-                  Voltar ao início
-                </Link>
-              ) : null}
+    <AppShell user={user} title="Instituições">
+      <div className="flex flex-col gap-8">
+        <section>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-[15px] font-bold text-[#0f172a]">Hospitais e clínicas</h2>
+              <p className="mt-1 text-[12px] text-[#64748b]">Instituições onde os procedimentos são realizados e às quais os templates podem ser vinculados.</p>
             </div>
-            {insurers.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-[#475569]">
-                {insurerCursor ? "Não há mais convênios nesta paginação." : "Nenhuma operadora cadastrada."}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {insurers.map((insurer) => (
-                  <details key={insurer.id} className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3">
-                    <summary className="cursor-pointer list-none text-[13px] font-semibold">
-                      {insurer.name}
-                      <span className="ml-2 text-[11px] font-normal text-[#64748b]">
-                        {insurer.code ? `cód. ${insurer.code} • ` : ""}{insurer.active ? "ativo" : "inativo"}
-                      </span>
-                    </summary>
-                    <div className="mt-3 border-t border-[#e2e8f0] pt-3">
-                      <InsurerForm insurer={insurer} />
-                    </div>
-                  </details>
-                ))}
-              </div>
-            )}
-            {insurerPage.nextCursor ? (
-              <div className="mt-4 flex justify-end border-t border-[#e2e8f0] pt-4">
-                <Link
-                  href={pageHref({ institutionCursor, insurerCursor: insurerPage.nextCursor })}
-                  className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]"
-                >
-                  Próximos 50 convênios
-                </Link>
-              </div>
-            ) : null}
-          </Card>
-        </div>
+            <CreateInstitutionPanel />
+          </div>
+
+          {institutions.length === 0 && !institutionCursor ? (
+            <EmptyState
+              title="Nenhuma instituição"
+              description="Cadastre hospital ou clínica separadamente do convênio/operadora."
+            />
+          ) : institutions.length === 0 ? (
+            <Card>
+              <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais instituições nesta paginação.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {institutions.map((institution) => (
+                <InstitutionCard key={institution.id} institution={institution} />
+              ))}
+            </div>
+          )}
+
+          <PaginationFooter
+            currentCursor={institutionCursor}
+            nextCursor={institutionPage.nextCursor}
+            initialHref={pageHref({ insurerCursor })}
+            nextHref={institutionPage.nextCursor ? pageHref({ institutionCursor: institutionPage.nextCursor, insurerCursor }) : null}
+            label="instituições"
+          />
+        </section>
+
+        <section>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-[15px] font-bold text-[#0f172a]">Convênios e operadoras</h2>
+              <p className="mt-1 text-[12px] text-[#64748b]">Operadoras usadas para carteirinha, regras de códigos e seleção dos formulários compatíveis.</p>
+            </div>
+            <CreateInsurerPanel />
+          </div>
+
+          {insurers.length === 0 && !insurerCursor ? (
+            <EmptyState title="Nenhum convênio" description="Cadastre a operadora de saúde sem misturá-la ao cadastro do hospital ou clínica." />
+          ) : insurers.length === 0 ? (
+            <Card>
+              <p className="py-8 text-center text-[13px] text-[#64748b]">Não há mais convênios nesta paginação.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {insurers.map((insurer) => (
+                <InsurerCard key={insurer.id} insurer={insurer} />
+              ))}
+            </div>
+          )}
+
+          <PaginationFooter
+            currentCursor={insurerCursor}
+            nextCursor={insurerPage.nextCursor}
+            initialHref={pageHref({ institutionCursor })}
+            nextHref={insurerPage.nextCursor ? pageHref({ institutionCursor, insurerCursor: insurerPage.nextCursor }) : null}
+            label="convênios"
+          />
+        </section>
       </div>
     </AppShell>
+  );
+}
+
+function InstitutionCard({ institution }: { institution: Institution }) {
+  return (
+    <details className="group rounded-xl border border-[#e2e8f0] bg-white p-4 open:shadow-md">
+      <summary className="cursor-pointer list-none focus-visible:outline-none">
+        <div className="flex min-h-[116px] flex-col justify-between">
+          <div>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-[14px] font-bold text-[#0f172a]">{institution.name}</h3>
+              <Badge tone={institution.active ? "green" : "neutral"}>{institution.active ? "Ativa" : "Inativa"}</Badge>
+            </div>
+            <div className="mt-2"><Badge tone="neutral">{KIND_LABEL[institution.kind]}</Badge></div>
+            {(institution.city || institution.state) ? (
+              <p className="mt-2 text-[11px] text-[#64748b]">{[institution.city, institution.state].filter(Boolean).join(" / ")}</p>
+            ) : null}
+          </div>
+          <div className="mt-4 flex items-center justify-between border-t border-[#e2e8f0] pt-3">
+            <p className="text-[11px] text-[#64748b]">{institution.cnpj ? `CNPJ ${institution.cnpj}` : "Sem CNPJ informado"}</p>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1e5fa6]">
+              Editar <PencilLine size={13} aria-hidden="true" />
+            </span>
+          </div>
+        </div>
+      </summary>
+      <div className="mt-4 border-t border-[#e2e8f0] pt-4">
+        <InstitutionForm institution={institution} />
+      </div>
+    </details>
+  );
+}
+
+function InsurerCard({ insurer }: { insurer: HealthInsurer }) {
+  return (
+    <details className="group rounded-xl border border-[#e2e8f0] bg-white p-4 open:shadow-md">
+      <summary className="cursor-pointer list-none focus-visible:outline-none">
+        <div className="flex min-h-[116px] flex-col justify-between">
+          <div>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-[14px] font-bold text-[#0f172a]">{insurer.name}</h3>
+              <Badge tone={insurer.active ? "green" : "neutral"}>{insurer.active ? "Ativo" : "Inativo"}</Badge>
+            </div>
+            <div className="mt-2"><Badge tone="blue">Convênio</Badge></div>
+          </div>
+          <div className="mt-4 flex items-center justify-between border-t border-[#e2e8f0] pt-3">
+            <p className="text-[11px] text-[#64748b]">{insurer.code ? `Código ${insurer.code}` : "Sem código interno"}</p>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1e5fa6]">
+              Editar <PencilLine size={13} aria-hidden="true" />
+            </span>
+          </div>
+        </div>
+      </summary>
+      <div className="mt-4 border-t border-[#e2e8f0] pt-4">
+        <InsurerForm insurer={insurer} />
+      </div>
+    </details>
+  );
+}
+
+function CreateInstitutionPanel() {
+  return (
+    <details className="group relative shrink-0">
+      <summary className="inline-flex cursor-pointer list-none items-center justify-center rounded-lg bg-[#1e5fa6] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#184e89] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e5fa6] focus-visible:ring-offset-2">
+        + Nova instituição
+      </summary>
+      <div className="mt-3 w-full rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xl sm:absolute sm:right-0 sm:z-20 sm:w-[480px]">
+        <h3 className="mb-3 text-[14px] font-bold">Nova instituição</h3>
+        <InstitutionForm />
+      </div>
+    </details>
+  );
+}
+
+function CreateInsurerPanel() {
+  return (
+    <details className="group relative shrink-0">
+      <summary className="inline-flex cursor-pointer list-none items-center justify-center rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2.5 text-[13px] font-semibold text-[#1e5fa6] hover:bg-[#dbeafe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e5fa6] focus-visible:ring-offset-2">
+        + Novo convênio
+      </summary>
+      <div className="mt-3 w-full rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xl sm:absolute sm:right-0 sm:z-20 sm:w-[400px]">
+        <h3 className="mb-3 text-[14px] font-bold">Novo convênio / operadora</h3>
+        <InsurerForm />
+      </div>
+    </details>
+  );
+}
+
+function PaginationFooter({
+  currentCursor,
+  nextCursor,
+  initialHref,
+  nextHref,
+  label,
+}: {
+  currentCursor?: string;
+  nextCursor: string | null;
+  initialHref: string;
+  nextHref: string | null;
+  label: string;
+}) {
+  if (!currentCursor && !nextCursor) return null;
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+      {currentCursor ? <Link href={initialHref} className="text-[12px] font-semibold text-[#64748b] hover:text-[#1e5fa6]">Voltar ao início</Link> : null}
+      {nextHref ? (
+        <Link href={nextHref} className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-[12px] font-semibold text-[#1e5fa6] hover:bg-[#eff6ff]">
+          Próximos 50 {label}
+        </Link>
+      ) : null}
+    </div>
   );
 }
 
