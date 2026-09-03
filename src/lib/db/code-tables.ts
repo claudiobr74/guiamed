@@ -1,17 +1,7 @@
 import type { DocumentData } from "firebase-admin/firestore";
 import type { Db } from "@/lib/db/client";
 import { orgCollection } from "@/lib/db/client";
-
-export interface TussCodeTable {
-  id: string;
-  key: string;
-  name: string;
-  currentVersion: string;
-  sourceFilename: string | null;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { TussCodeTable } from "@/types/domain";
 
 function mapTable(id: string, data: DocumentData): TussCodeTable {
   return {
