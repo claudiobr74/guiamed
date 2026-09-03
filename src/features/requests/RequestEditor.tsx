@@ -19,6 +19,7 @@ import {
 } from "@/app/actions";
 import { parseQuantity } from "@/lib/quantity";
 import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
+import { resolveKitItemCodes } from "@/lib/kits/resolve-kit-codes";
 import { resolveTemplateSelection } from "@/lib/templates/compatibility";
 import { maskCpf } from "@/lib/personal-data";
 
@@ -721,8 +722,12 @@ export function RequestEditor({
         const items = kit.items.map((item, index) => {
           const procedure = kitProcedureById.get(item.procedureId);
           if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
-          const tuss = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });
-          const ipasgo = resolveProcedureCode(procedure.codes, { procedureId: procedure.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+          const { tuss, ipasgo } = resolveKitItemCodes({
+            procedure,
+            item,
+            healthInsurerId: request.healthInsurerId,
+            at: resolutionDate,
+          });
           return {
             id: crypto.randomUUID(),
             requestId: request.id,
