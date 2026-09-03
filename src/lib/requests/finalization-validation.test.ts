@@ -21,4 +21,48 @@ describe("validação de finalização", () => {
     const issues = validateRequestForFinalization({ request: invalid, template, version, mappings: [], repeaters: [{ id: "r", templateVersionId: version.id, source: "procedures", page: 1, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [{ field: "tussCode", x: 0, width: 50 }, { field: "ipasgoCode", x: 50, width: 50 }] }] });
     expect(issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["INVALID_QUANTITY", "TUSS_REQUIRED", "IPASGO_REQUIRED"]));
   });
+
+  it("soma a capacidade dos repeaters configurados para continuação", () => {
+    const continuedRequest = {
+      ...request,
+      items: Array.from({ length: 7 }, (_, index) => ({
+        ...request.items[0],
+        id: `item-${index}`,
+        sortOrder: index,
+      })),
+    };
+    const issues = validateRequestForFinalization({
+      request: continuedRequest,
+      template,
+      version,
+      mappings: [],
+      repeaters: [
+        { id: "r1", templateVersionId: version.id, source: "procedures", page: 1, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [] },
+        { id: "r2", templateVersionId: version.id, source: "procedures", page: 2, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [] },
+      ],
+    });
+    expect(issues.some((issue) => issue.code === "PROCEDURE_OVERFLOW")).toBe(false);
+  });
+
+  it("retorna erro estruturado quando procedimentos excedem todos os repeaters", () => {
+    const overflowRequest = {
+      ...request,
+      items: Array.from({ length: 11 }, (_, index) => ({
+        ...request.items[0],
+        id: `item-${index}`,
+        sortOrder: index,
+      })),
+    };
+    const issues = validateRequestForFinalization({
+      request: overflowRequest,
+      template,
+      version,
+      mappings: [],
+      repeaters: [
+        { id: "r1", templateVersionId: version.id, source: "procedures", page: 1, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [] },
+        { id: "r2", templateVersionId: version.id, source: "procedures", page: 2, startX: 0, startY: 0, rowHeight: 10, maxRows: 5, columns: [] },
+      ],
+    });
+    expect(issues).toContainEqual(expect.objectContaining({ code: "PROCEDURE_OVERFLOW", severity: "error" }));
+  });
 });

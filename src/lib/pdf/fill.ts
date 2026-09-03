@@ -1,6 +1,18 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { OverflowError, assertProcedureOverflow } from "@/lib/overflow";
-import { clipText, topLeftToPdfLib } from "@/lib/pdf/coords";
+import {
+  PDFCheckBox,
+  PDFDocument,
+  PDFDropdown,
+  PDFOptionList,
+  PDFRadioGroup,
+  PDFTextField,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFForm,
+  type PDFPage,
+} from "pdf-lib";
+import { OverflowError, assertProcedureOverflow, maxRowsFromRepeaters } from "@/lib/overflow";
+import { topLeftToPdfLib } from "@/lib/pdf/coords";
 import type { FieldMapping, PdfRepeater, SurgicalRequest } from "@/types/domain";
 
 export interface FillPdfInput {
@@ -13,6 +25,46 @@ export interface FillPdfInput {
 
 export interface FillPdfResult {
   bytes: Uint8Array;
+}
+
+export class PdfTextOverflowError extends Error {
+  readonly code = "PDF_TEXT_OVERFLOW";
+  readonly semanticField: string;
+
+  constructor(semanticField: string) {
+    const message = semanticField === "request.clinical_justification"
+      ? "A justificativa clínica excede o espaço disponível neste template."
+      : semanticField.startsWith("procedures[")
+        ? "Um dos campos de procedimento excede o espaço disponível neste template."
+        : `O conteúdo do campo ${semanticField} excede o espaço disponível neste template.`;
+    super(message);
+    this.name = "PdfTextOverflowError";
+    this.semanticField = semanticField;
+  }
+}
+
+export class PdfFontEncodingError extends Error {
+  readonly code = "PDF_FONT_UNSUPPORTED_CHARACTER";
+  readonly semanticField: string;
+
+  constructor(semanticField: string) {
+    super(
+      `O campo ${semanticField} contém um caractere que a fonte deste template não suporta.`,
+    );
+    this.name = "PdfFontEncodingError";
+    this.semanticField = semanticField;
+  }
+}
+
+export class PdfAcroFormError extends Error {
+  readonly code = "PDF_ACROFORM_INVALID_MAPPING";
+  readonly pdfFieldName: string;
+
+  constructor(pdfFieldName: string, message: string) {
+    super(message);
+    this.name = "PdfAcroFormError";
+    this.pdfFieldName = pdfFieldName;
+  }
 }
 
 function getSemanticValue(request: SurgicalRequest, semantic: string): string {
@@ -76,37 +128,42 @@ function widthAt(font: PDFFont, text: string, size: number): number {
   return font.widthOfTextAtSize(text, size);
 }
 
-function fitMeasuredFontSize(input: {
-  font: PDFFont;
-  text: string;
-  maxWidth: number;
-  fontSize: number;
-  autoShrink: boolean;
-  minSize?: number;
-}): number {
-  if (!input.autoShrink || !input.text) return input.fontSize;
-  const width = widthAt(input.font, input.text, input.fontSize);
-  if (width <= input.maxWidth) return input.fontSize;
-  const scaled = input.fontSize * (input.maxWidth / Math.max(width, 1));
-  return Math.max(input.minSize ?? 6, scaled);
-}
-
-function clipLineToWidth(text: string, font: PDFFont, size: number, maxWidth: number): string {
-  if (widthAt(font, text, size) <= maxWidth) return text;
-  const ellipsis = "...";
-  if (widthAt(font, ellipsis, size) > maxWidth) return "";
-  let low = 0;
-  let high = text.length;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    const candidate = `${text.slice(0, mid)}${ellipsis}`;
-    if (widthAt(font, candidate, size) <= maxWidth) low = mid;
-    else high = mid - 1;
+function assertFontSupportsText(font: PDFFont, text: string, semanticField: string): void {
+  try {
+    font.encodeText(text);
+  } catch {
+    throw new PdfFontEncodingError(semanticField);
   }
-  return `${text.slice(0, low).trimEnd()}${ellipsis}`;
 }
 
-function wrapLines(text: string, maxWidth: number, fontSize: number, font: PDFFont): string[] {
+function splitWordToWidth(
+  word: string,
+  maxWidth: number,
+  fontSize: number,
+  font: PDFFont,
+): string[] | null {
+  const chunks: string[] = [];
+  let current = "";
+  for (const character of Array.from(word)) {
+    if (widthAt(font, character, fontSize) > maxWidth) return null;
+    const candidate = `${current}${character}`;
+    if (current && widthAt(font, candidate, fontSize) > maxWidth) {
+      chunks.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function wrapLines(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  font: PDFFont,
+): string[] | null {
   const lines: string[] = [];
   for (const paragraph of text.split(/\r?\n/)) {
     if (!paragraph.trim()) {
@@ -125,13 +182,51 @@ function wrapLines(text: string, maxWidth: number, fontSize: number, font: PDFFo
       if (widthAt(font, word, fontSize) <= maxWidth) {
         current = word;
       } else {
-        lines.push(clipLineToWidth(word, font, fontSize, maxWidth));
-        current = "";
+        const chunks = splitWordToWidth(word, maxWidth, fontSize, font);
+        if (!chunks) return null;
+        lines.push(...chunks.slice(0, -1));
+        current = chunks.at(-1) ?? "";
       }
     }
     if (current) lines.push(current);
   }
   return lines;
+}
+
+function mappedTextLayout(
+  font: PDFFont,
+  mapping: FieldMapping,
+  text: string,
+): { fontSize: number; lineHeight: number; lines: string[] } {
+  if (
+    mapping.maxCharacters !== null &&
+    Array.from(text).length > mapping.maxCharacters
+  ) {
+    throw new PdfTextOverflowError(mapping.semanticField);
+  }
+  const normalized = mapping.multiline ? text : text.replace(/\r?\n/g, " ");
+  assertFontSupportsText(font, normalized.replace(/\r?\n/g, " "), mapping.semanticField);
+  const minimumSize = mapping.autoShrink ? Math.min(6, mapping.fontSize) : mapping.fontSize;
+  const sizes: number[] = [];
+  for (let size = mapping.fontSize; size >= minimumSize; size -= 0.5) {
+    sizes.push(Math.max(minimumSize, size));
+  }
+  if (sizes.at(-1) !== minimumSize) sizes.push(minimumSize);
+
+  for (const fontSize of sizes) {
+    const lines = mapping.multiline
+      ? wrapLines(normalized, mapping.width, fontSize, font)
+      : [normalized];
+    if (!lines || lines.some((line) => widthAt(font, line, fontSize) > mapping.width)) {
+      continue;
+    }
+    const lineHeight = fontSize + 2;
+    if (lines.length * lineHeight <= mapping.height) {
+      return { fontSize, lineHeight, lines };
+    }
+  }
+
+  throw new PdfTextOverflowError(mapping.semanticField);
 }
 
 function alignedX(mapping: FieldMapping, lineWidth: number): number {
@@ -146,8 +241,7 @@ function drawMappedText(
   mapping: FieldMapping,
   text: string,
 ): void {
-  const value = clipText(text, mapping.maxCharacters);
-  if (!value) return;
+  if (!text) return;
   const pageHeight = page.getHeight();
   const origin = topLeftToPdfLib({
     x: mapping.x,
@@ -155,31 +249,140 @@ function drawMappedText(
     height: mapping.height,
     pageHeightPt: pageHeight,
   });
-  const size = fitMeasuredFontSize({
-    font,
-    text: mapping.multiline ? value.split(/\r?\n/).reduce((longest, line) => widthAt(font, line, mapping.fontSize) > widthAt(font, longest, mapping.fontSize) ? line : longest, "") : value,
-    maxWidth: mapping.width,
-    fontSize: mapping.fontSize,
-    autoShrink: mapping.autoShrink,
-  });
-  const rawLines = mapping.multiline ? wrapLines(value, mapping.width, size, font) : [clipLineToWidth(value, font, size, mapping.width)];
-  const lineHeight = size + 2;
-  const maxLines = Math.max(1, Math.floor(mapping.height / lineHeight));
-  const lines = rawLines.slice(0, maxLines);
+  const layout = mappedTextLayout(font, mapping, text);
 
-  lines.forEach((line, i) => {
+  layout.lines.forEach((line, i) => {
     if (!line) return;
-    const y = origin.y + mapping.height - lineHeight * (i + 1);
-    if (y < origin.y) return;
-    const lineWidth = widthAt(font, line, size);
+    const y = origin.y + mapping.height - layout.lineHeight * (i + 1);
+    const lineWidth = widthAt(font, line, layout.fontSize);
     page.drawText(line, {
       x: alignedX(mapping, lineWidth),
       y,
-      size,
+      size: layout.fontSize,
       font,
       color: rgb(0.06, 0.09, 0.16),
     });
   });
+}
+
+const CHECKED_VALUES = new Set(["1", "true", "sim", "yes", "x"]);
+const UNCHECKED_VALUES = new Set(["", "0", "false", "não", "nao", "no"]);
+
+function selectExactOption(
+  pdfFieldName: string,
+  value: string,
+  options: string[],
+): string {
+  const option = options.find((candidate) => candidate === value);
+  if (!option) {
+    throw new PdfAcroFormError(
+      pdfFieldName,
+      `O valor destinado ao campo ${pdfFieldName} não corresponde a uma opção permitida no PDF oficial.`,
+    );
+  }
+  return option;
+}
+
+function validateAcroFormTextLayout(
+  field: PDFTextField | PDFDropdown | PDFOptionList,
+  font: PDFFont,
+  mapping: FieldMapping,
+  value: string,
+  multiline: boolean,
+): void {
+  const rectangles = field.acroField.getWidgets().map((widget) => widget.getRectangle());
+  if (rectangles.length === 0) {
+    throw new PdfAcroFormError(
+      mapping.pdfFieldName ?? "campo",
+      `O campo AcroForm ${mapping.pdfFieldName ?? "informado"} não possui uma área visível no PDF oficial.`,
+    );
+  }
+  const width = Math.min(...rectangles.map((rectangle) => rectangle.width));
+  const height = Math.min(...rectangles.map((rectangle) => rectangle.height));
+  mappedTextLayout(font, {
+    ...mapping,
+    width: Math.max(1, width - 2),
+    height: Math.max(1, height - 2),
+    multiline,
+  }, value);
+}
+
+function fillAcroFormField(
+  form: PDFForm,
+  font: PDFFont,
+  mapping: FieldMapping,
+  value: string,
+): void {
+  const pdfFieldName = mapping.pdfFieldName;
+  if (!pdfFieldName) return;
+
+  let field;
+  try {
+    field = form.getField(pdfFieldName);
+  } catch {
+    throw new PdfAcroFormError(
+      pdfFieldName,
+      `O campo AcroForm ${pdfFieldName} não existe nesta versão do template.`,
+    );
+  }
+
+  if (field instanceof PDFTextField) {
+    const maximumLength = field.getMaxLength();
+    if (maximumLength !== undefined && Array.from(value).length > maximumLength) {
+      throw new PdfTextOverflowError(mapping.semanticField);
+    }
+    validateAcroFormTextLayout(field, font, mapping, value, field.isMultiline());
+    field.setText(value);
+    try {
+      field.setFontSize(mapping.fontSize);
+    } catch {
+      // O valor permanece preenchido com o tamanho nativo quando o PDF não expõe /DA.
+    }
+    return;
+  }
+
+  if (field instanceof PDFCheckBox) {
+    const normalized = value.trim().toLocaleLowerCase("pt-BR");
+    if (CHECKED_VALUES.has(normalized)) field.check();
+    else if (UNCHECKED_VALUES.has(normalized)) field.uncheck();
+    else {
+      throw new PdfAcroFormError(
+        pdfFieldName,
+        `O campo ${pdfFieldName} é uma caixa de seleção, mas o valor mapeado não é booleano.`,
+      );
+    }
+    return;
+  }
+
+  if (field instanceof PDFRadioGroup) {
+    if (!value) field.clear();
+    else field.select(selectExactOption(pdfFieldName, value, field.getOptions()));
+    return;
+  }
+
+  if (field instanceof PDFDropdown) {
+    validateAcroFormTextLayout(field, font, mapping, value, false);
+    if (!value) field.clear();
+    else field.select(selectExactOption(pdfFieldName, value, field.getOptions()));
+    try {
+      field.setFontSize(mapping.fontSize);
+    } catch {
+      // O valor permanece selecionado com o tamanho nativo quando o PDF não expõe /DA.
+    }
+    return;
+  }
+
+  if (field instanceof PDFOptionList) {
+    validateAcroFormTextLayout(field, font, mapping, value, false);
+    if (!value) field.clear();
+    else field.select(selectExactOption(pdfFieldName, value, field.getOptions()));
+    return;
+  }
+
+  throw new PdfAcroFormError(
+    pdfFieldName,
+    `O tipo do campo AcroForm ${pdfFieldName} ainda não é suportado pelo GuiaMed.`,
+  );
 }
 
 export function validateRequestForPdf(request: SurgicalRequest, mappings: FieldMapping[]): string[] {
@@ -199,30 +402,19 @@ export function validateRequestForPdf(request: SurgicalRequest, mappings: FieldM
 }
 
 export async function fillPdf(input: FillPdfInput): Promise<FillPdfResult> {
-  const maxRows = input.repeaters.length
-    ? Math.max(...input.repeaters.map((r) => r.maxRows))
-    : null;
+  const maxRows = maxRowsFromRepeaters(input.repeaters);
   assertProcedureOverflow(input.request.items.length, maxRows);
 
   const pdf = await PDFDocument.load(input.templateBytes);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const form = pdf.getForm();
+  let changedAcroForm = false;
 
   for (const mapping of input.mappings) {
     const value = getSemanticValue(input.request, mapping.semanticField);
     if (mapping.mappingKind === "acroform" && mapping.pdfFieldName) {
-      try {
-        const field = form.getTextField(mapping.pdfFieldName);
-        field.setText(value);
-        try {
-          field.setFontSize(mapping.fontSize);
-        } catch {
-          /* alguns campos AcroForm não aceitam tamanho fixo */
-        }
-      } catch {
-        const page = pdf.getPage(Math.max(0, mapping.page - 1));
-        drawMappedText(page, font, mapping, value);
-      }
+      fillAcroFormField(form, font, mapping, value);
+      changedAcroForm = true;
     } else if (mapping.semanticField === "signature.image" && input.signatureBytes) {
       const page = pdf.getPage(Math.max(0, mapping.page - 1));
       const origin = topLeftToPdfLib({
@@ -254,17 +446,17 @@ export async function fillPdf(input: FillPdfInput): Promise<FillPdfResult> {
     }
   }
 
+  let itemOffset = 0;
   for (const repeater of input.repeaters) {
-    if (input.request.items.length > repeater.maxRows) {
-      throw new OverflowError(repeater.maxRows, input.request.items.length);
-    }
     const page = pdf.getPage(Math.max(0, repeater.page - 1));
-    input.request.items.forEach((item, index) => {
-      const y = repeater.startY + index * repeater.rowHeight;
+    const repeaterItems = input.request.items.slice(itemOffset, itemOffset + repeater.maxRows);
+    repeaterItems.forEach((item, repeaterIndex) => {
+      const itemIndex = itemOffset + repeaterIndex;
+      const y = repeater.startY + repeaterIndex * repeater.rowHeight;
       for (const column of repeater.columns) {
-        const semantic = `procedures[${index}].${column.field}`;
+        const semantic = `procedures[${itemIndex}].${column.field}`;
         const mapping: FieldMapping = {
-          id: `tmp-${index}-${column.field}`,
+          id: `tmp-${itemIndex}-${column.field}`,
           templateVersionId: repeater.templateVersionId,
           semanticField: semantic,
           pdfFieldName: null,
@@ -284,12 +476,18 @@ export async function fillPdf(input: FillPdfInput): Promise<FillPdfResult> {
         drawMappedText(page, font, mapping, getSemanticValue(input.request, semantic));
       }
     });
+    itemOffset += repeater.maxRows;
   }
 
-  try {
-    form.updateFieldAppearances(font);
-  } catch {
-    // overlay-only PDFs may not have a form
+  if (changedAcroForm) {
+    try {
+      form.updateFieldAppearances(font);
+    } catch {
+      throw new PdfAcroFormError(
+        "appearance",
+        "Não foi possível atualizar a aparência dos campos AcroForm no PDF oficial.",
+      );
+    }
   }
 
   const bytes = await pdf.save();

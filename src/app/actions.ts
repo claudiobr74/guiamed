@@ -24,6 +24,7 @@ import { validateImportRows, parseCsv, parseSheetMatrix, cellText, type ImportRo
 import { buildJustificationDraft, type JustificationFacts } from "@/lib/justification";
 import { suggestSemanticField } from "@/lib/mapping-suggest";
 import { inspectPdf } from "@/lib/pdf/inspect";
+import { validateMappingsForTemplate, validateRepeaterForTemplate } from "@/lib/pdf/mapping-validation";
 import { renderRequestPdf } from "@/lib/pdf/render-request";
 import { parseQuantity } from "@/lib/quantity";
 import { MEDICAL_REVIEW_STATEMENT } from "@/lib/requests/finalized-snapshot";
@@ -328,16 +329,22 @@ export async function uploadTemplateAction(formData: FormData) {
 
 export async function saveMappingsAction(versionId: string, mappings: Omit<FieldMapping, "id" | "templateVersionId">[]) {
   const user = await requireAdmin();
-  await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.saveMappings(db, user.organizationId, versionId, mappings),
-  );
+  await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const version = await repos.getTemplateVersion(db, user.organizationId, versionId);
+    if (!version) throw new Error("Versão do template não encontrada nesta organização.");
+    const validated = validateMappingsForTemplate(mappings, version);
+    await repos.saveMappings(db, user.organizationId, versionId, validated);
+  });
 }
 
 export async function saveRepeaterAction(repeater: Omit<PdfRepeater, "id"> & { id?: string }) {
   const user = await requireAdmin();
-  await withOrganizationContext(user.organizationId, user.id, (db) =>
-    repos.saveRepeater(db, user.organizationId, repeater),
-  );
+  await withOrganizationContext(user.organizationId, user.id, async (db) => {
+    const version = await repos.getTemplateVersion(db, user.organizationId, repeater.templateVersionId);
+    if (!version) throw new Error("Versão do template não encontrada nesta organização.");
+    const validated = validateRepeaterForTemplate(repeater, version);
+    await repos.saveRepeater(db, user.organizationId, validated);
+  });
 }
 
 export async function generatePdfAction(requestId: string, confirmation: { accepted: boolean; statement: string }) {

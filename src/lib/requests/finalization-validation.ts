@@ -1,4 +1,5 @@
 import type { DocumentTemplate, FieldMapping, PdfRepeater, SurgicalRequest, TemplateVersion } from "@/types/domain";
+import { maxRowsFromRepeaters } from "@/lib/overflow";
 
 export type FinalizationIssueSeverity = "error" | "warning";
 
@@ -37,6 +38,13 @@ export function validateRequestForFinalization(input: {
   if (template?.healthInsurerId && template.healthInsurerId !== request.healthInsurerId) error("TEMPLATE_INCOMPATIBLE", "O template não é compatível com o convênio selecionado.");
 
   if (request.items.length === 0) error("PROCEDURE_REQUIRED", "Adicione ao menos um procedimento.");
+  const procedureCapacity = maxRowsFromRepeaters(repeaters);
+  if (procedureCapacity !== null && request.items.length > procedureCapacity) {
+    error(
+      "PROCEDURE_OVERFLOW",
+      `Este template suporta até ${procedureCapacity} procedimentos. Foram selecionados ${request.items.length}.`,
+    );
+  }
   const repeaterFields = new Set(repeaters.flatMap((repeater) => repeater.columns.map((column) => column.field.toLowerCase())));
   const tussRequired = [...repeaterFields].some((field) => field.includes("tuss"));
   const ipasgoRequired = [...repeaterFields].some((field) => field.includes("ipasgo"));
