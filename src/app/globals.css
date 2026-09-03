@@ -43,3 +43,17 @@ body {
   outline: 2px solid var(--gm-primary);
   outline-offset: 2px;
 }
+
+/* Mantém o progresso da guia legível como no Figma sem retirar os botões acessíveis de cada etapa. */
+main ol:has(> li > button[aria-label^="Etapa "]) > li {
+  flex-shrink: 0;
+}
+
+main ol:has(> li > button[aria-label^="Etapa "]) > li:not(:last-child)::after {
+  content: "›";
+  margin-left: 0.5rem;
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
