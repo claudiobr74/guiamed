@@ -5,13 +5,17 @@ import { requireAdmin } from "@/lib/auth/current";
 import { searchInsurersByName, searchProceduresByName } from "@/lib/db/admin-search";
 import { buildAuditLogDocument, writeAuditLog } from "@/lib/db/audit";
 import { withOrganizationContext, orgCollection } from "@/lib/db/client";
-import * as repos from "@/lib/db/repos";
+import { insertCodesIdempotentWithStatus } from "@/lib/db/import-write";
 import { getExistingCodesForImportRows } from "@/lib/db/import-lookup";
 import {
   getSearchIndexStatus,
   indexImportedProcedureCodes,
   searchProceduresIndexed,
 } from "@/lib/db/indexed-search";
+import {
+  safeCodeImportFileError,
+  validateCodeImportFileMetadata,
+} from "@/lib/import-file-validation";
 import { parseQuantity } from "@/lib/quantity";
 import { buildImportPreview } from "@/lib/import-preview";
 import {
@@ -21,14 +25,22 @@ import {
   validateImportRows,
   type ImportRow,
 } from "@/lib/import-codes";
+import { assertRateLimit } from "@/lib/security/rate-limit";
 
 const MIN_SEARCH_LENGTH = 2;
+
+type ImportIssue = { row: number; field: string; message: string };
+
+function fileIssue(message: string): { ok: false; issues: ImportIssue[] } {
+  return { ok: false, issues: [{ row: 1, field: "file", message }] };
+}
 
 async function parseImportFile(file: File): Promise<{ rows: ImportRow[]; format: "csv" | "xlsx" | "json" }> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".json")) {
-    const parsed = JSON.parse(await file.text()) as ImportRow[];
-    return { rows: parsed, format: "json" };
+    const parsed = JSON.parse(await file.text()) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("O arquivo JSON deve conter uma lista de códigos.");
+    return { rows: parsed as ImportRow[], format: "json" };
   }
   if (name.endsWith(".xlsx")) {
     const wb = new ExcelJS.Workbook();
@@ -76,36 +88,43 @@ export async function previewImportCodesDetailedAction(formData: FormData) {
   const file = formData.get("file");
   const defaultSystem = String(formData.get("codeSystem") ?? "TUSS").trim().toUpperCase();
   const version = String(formData.get("version") ?? "").trim();
-  if (!(file instanceof File)) throw new Error("Arquivo ausente.");
+  if (!(file instanceof File)) return fileIssue("Arquivo ausente.");
 
-  const { rows } = await parseImportFile(file);
-  const validated = normalizeRows(rows, version, defaultSystem);
-  if (validated.rows.length === 0) {
+  try {
+    validateCodeImportFileMetadata({ name: file.name, size: file.size });
+    await withOrganizationContext(user.organizationId, user.id, (db) =>
+      assertRateLimit(db, user.organizationId, {
+        actorId: user.id,
+        action: "preview_procedure_code_import",
+        limit: 20,
+        windowMs: 60_000,
+      }),
+    );
+
+    const { rows } = await parseImportFile(file);
+    const validated = normalizeRows(rows, version, defaultSystem);
+    if (validated.rows.length === 0) {
+      return fileIssue(
+        "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
+      );
+    }
+
+    const existing = await withOrganizationContext(user.organizationId, user.id, (db) =>
+      getExistingCodesForImportRows(db, user.organizationId, validated.rows),
+    );
+    const analysis = buildImportPreview(validated.rows, validated.issues, existing);
+
     return {
-      ok: false as const,
-      issues: [
-        {
-          row: 1,
-          field: "file",
-          message: "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
-        },
-      ],
+      ok: true as const,
+      filename: file.name,
+      sizeBytes: file.size,
+      codeSystem: defaultSystem,
+      version: version || validated.rows[0]?.version || "1",
+      ...analysis,
     };
+  } catch (error) {
+    return fileIssue(safeCodeImportFileError(error));
   }
-
-  const existing = await withOrganizationContext(user.organizationId, user.id, (db) =>
-    getExistingCodesForImportRows(db, user.organizationId, validated.rows),
-  );
-  const analysis = buildImportPreview(validated.rows, validated.issues, existing);
-
-  return {
-    ok: true as const,
-    filename: file.name,
-    sizeBytes: file.size,
-    codeSystem: defaultSystem,
-    version: version || validated.rows[0]?.version || "1",
-    ...analysis,
-  };
 }
 
 export async function importCodesDetailedAction(formData: FormData) {
@@ -113,54 +132,61 @@ export async function importCodesDetailedAction(formData: FormData) {
   const file = formData.get("file");
   const defaultSystem = String(formData.get("codeSystem") ?? "TUSS").trim().toUpperCase();
   const version = String(formData.get("version") ?? "").trim();
-  if (!(file instanceof File)) throw new Error("Arquivo ausente.");
+  if (!(file instanceof File)) return fileIssue("Arquivo ausente.");
 
-  const { rows, format } = await parseImportFile(file);
-  const validated = normalizeRows(rows, version, defaultSystem);
-  if (validated.rows.length === 0) {
-    return {
-      ok: false as const,
-      issues: [
-        {
-          row: 1,
-          field: "file",
-          message: "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
-        },
-      ],
-    };
-  }
-  if (validated.issues.length > 0) {
-    return { ok: false as const, issues: validated.issues };
-  }
+  try {
+    validateCodeImportFileMetadata({ name: file.name, size: file.size });
+    await withOrganizationContext(user.organizationId, user.id, (db) =>
+      assertRateLimit(db, user.organizationId, {
+        actorId: user.id,
+        action: "import_procedure_codes",
+        limit: 5,
+        windowMs: 60_000,
+      }),
+    );
 
-  const result = await withOrganizationContext(user.organizationId, user.id, async (db) => {
-    const importedVersion = version || validated.rows[0]?.version || "1";
-    const imported = await repos.insertCodesIdempotent(db, user.organizationId, user.id, {
-      codeSystem: defaultSystem,
-      version: importedVersion,
-      sourceFilename: file.name,
-      sourceFormat: format,
-      rows: validated.rows,
-    });
-    await indexImportedProcedureCodes(db, user.organizationId, validated.rows);
-    await writeAuditLog(db, user.organizationId, {
-      userId: user.id,
-      action: "import_procedure_codes",
-      entityType: "import_batch",
-      entityId: imported.batchId,
-      metadata: {
+    const { rows, format } = await parseImportFile(file);
+    const validated = normalizeRows(rows, version, defaultSystem);
+    if (validated.rows.length === 0) {
+      return fileIssue(
+        "Não encontramos códigos TUSS/IPASGO nesta planilha. Confira se há uma coluna de código e outra de descrição.",
+      );
+    }
+    if (validated.issues.length > 0) {
+      return { ok: false as const, issues: validated.issues };
+    }
+
+    const result = await withOrganizationContext(user.organizationId, user.id, async (db) => {
+      const importedVersion = version || validated.rows[0]?.version || "1";
+      const imported = await insertCodesIdempotentWithStatus(db, user.organizationId, user.id, {
         codeSystem: defaultSystem,
         version: importedVersion,
         sourceFilename: file.name,
         sourceFormat: format,
-        rowCount: validated.rows.length,
-        inserted: imported.inserted,
-        updated: imported.updated,
-      },
+        rows: validated.rows,
+      });
+      await indexImportedProcedureCodes(db, user.organizationId, validated.rows);
+      await writeAuditLog(db, user.organizationId, {
+        userId: user.id,
+        action: "import_procedure_codes",
+        entityType: "import_batch",
+        entityId: imported.batchId,
+        metadata: {
+          codeSystem: defaultSystem,
+          version: importedVersion,
+          sourceFilename: file.name,
+          sourceFormat: format,
+          rowCount: validated.rows.length,
+          inserted: imported.inserted,
+          updated: imported.updated,
+        },
+      });
+      return imported;
     });
-    return imported;
-  });
-  return { ok: true as const, ...result };
+    return { ok: true as const, ...result };
+  } catch (error) {
+    return fileIssue(safeCodeImportFileError(error));
+  }
 }
 
 export async function searchCodeProceduresAction(query: string) {
@@ -226,24 +252,27 @@ export async function saveProcedureCodeLinkAction(data: {
     const auditRef = orgCollection(db, user.organizationId, "auditLogs").doc();
     const batch = db.batch();
     batch.set(codeRef, next, { merge: true });
-    batch.set(auditRef, buildAuditLogDocument({
-      userId: user.id,
-      action: "update_procedure_code_link",
-      entityType: "procedure_code",
-      entityId: codeId,
-      metadata: {
-        before: {
-          procedureId: (previous.procedureId as string | null | undefined) ?? null,
-          healthInsurerId: (previous.healthInsurerId as string | null | undefined) ?? null,
-          defaultQuantity: parseQuantity(previous.defaultQuantity),
+    batch.set(
+      auditRef,
+      buildAuditLogDocument({
+        userId: user.id,
+        action: "update_procedure_code_link",
+        entityType: "procedure_code",
+        entityId: codeId,
+        metadata: {
+          before: {
+            procedureId: (previous.procedureId as string | null | undefined) ?? null,
+            healthInsurerId: (previous.healthInsurerId as string | null | undefined) ?? null,
+            defaultQuantity: parseQuantity(previous.defaultQuantity),
+          },
+          after: {
+            procedureId: next.procedureId,
+            healthInsurerId: next.healthInsurerId,
+            defaultQuantity: next.defaultQuantity,
+          },
         },
-        after: {
-          procedureId: next.procedureId,
-          healthInsurerId: next.healthInsurerId,
-          defaultQuantity: next.defaultQuantity,
-        },
-      },
-    }));
+      }),
+    );
     await batch.commit();
 
     return {
