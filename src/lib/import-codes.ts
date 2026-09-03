@@ -33,6 +33,42 @@ export interface ImportValidation {
 
 const REQUIRED = ["code", "description", "version"] as const;
 
+function validCalendarDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/** Normaliza vigência sem aplicar timezone. Aceita ISO e formato brasileiro. */
+export function normalizeImportDate(value: unknown): { value: string | null; valid: boolean } {
+  const text = String(value ?? "").trim();
+  if (!text) return { value: null, valid: true };
+
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    return validCalendarDate(year, month, day)
+      ? { value: `${iso[1]}-${iso[2]}-${iso[3]}`, valid: true }
+      : { value: null, valid: false };
+  }
+
+  const br = text.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/);
+  if (br) {
+    const day = Number(br[1]);
+    const month = Number(br[2]);
+    const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3]);
+    if (!validCalendarDate(year, month, day)) return { value: null, valid: false };
+    return {
+      value: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      valid: true,
+    };
+  }
+
+  return { value: null, valid: false };
+}
+
 export function validateImportRows(
   rows: ImportRow[],
   defaultSystem: string,
@@ -47,11 +83,18 @@ export function validateImportRows(
     const code = String(raw.code ?? "").trim();
     const description = String(raw.description ?? "").trim();
     const version = String(raw.version ?? "").trim();
+    const validFrom = normalizeImportDate(raw.valid_from);
+    const validUntil = normalizeImportDate(raw.valid_until);
 
     if (!code) issues.push({ row, field: "code", message: "Código ausente." });
     if (!description) issues.push({ row, field: "description", message: "Descrição ausente." });
     if (!version) issues.push({ row, field: "version", message: "Versão inválida." });
     if (!codeSystem) issues.push({ row, field: "code_system", message: "Sistema de código ausente." });
+    if (!validFrom.valid) issues.push({ row, field: "valid_from", message: "Vigência inicial inválida. Use AAAA-MM-DD ou DD/MM/AAAA." });
+    if (!validUntil.valid) issues.push({ row, field: "valid_until", message: "Vigência final inválida. Use AAAA-MM-DD ou DD/MM/AAAA." });
+    if (validFrom.value && validUntil.value && validFrom.value > validUntil.value) {
+      issues.push({ row, field: "valid_until", message: "Vigência final não pode ser anterior à vigência inicial." });
+    }
 
     const key = `${codeSystem}|${code}|${version}`;
     if (code && version) {
@@ -67,15 +110,18 @@ export function validateImportRows(
       }
     }
 
+    const activeText = typeof raw.active === "string" ? raw.active.trim().toLocaleLowerCase("pt-BR") : raw.active;
+    const inactive = activeText === false || activeText === "false" || activeText === "0" || activeText === "não" || activeText === "nao" || activeText === "inativo";
+
     normalized.push({
       codeSystem,
       code,
       description,
       version,
-      validFrom: raw.valid_from ? String(raw.valid_from) : null,
-      validUntil: raw.valid_until ? String(raw.valid_until) : null,
+      validFrom: validFrom.value,
+      validUntil: validUntil.value,
       procedureName: raw.procedure_name ? String(raw.procedure_name).trim() : null,
-      active: raw.active === false || raw.active === "false" ? false : true,
+      active: !inactive,
     });
   });
 
@@ -135,10 +181,7 @@ export function cellText(value: unknown): string {
 export function extractVigencia(text: string): string | null {
   const match = text.match(/vig[eê]ncia\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
   if (!match) return null;
-  const day = match[1].padStart(2, "0");
-  const month = match[2].padStart(2, "0");
-  const year = match[3].length === 2 ? `20${match[3]}` : match[3];
-  return `${year}-${month}-${day}`;
+  return normalizeImportDate(`${match[1]}/${match[2]}/${match[3]}`).value;
 }
 
 export function normalizeProcedureCode(raw: string): string {
