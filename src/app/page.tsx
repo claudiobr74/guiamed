@@ -5,9 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth/page";
 import { withOrganizationContext } from "@/lib/db/client";
+import { listKitsPage } from "@/lib/db/admin-page";
 import { dashboardStatsAggregated } from "@/lib/db/dashboard-stats";
 import { listRequestPage } from "@/lib/db/request-page";
-import { listKits } from "@/lib/db/repos";
 import { createRequestAction } from "@/app/actions";
 
 function statusTone(status: string) {
@@ -25,12 +25,12 @@ function statusLabel(status: string) {
 export default async function DashboardPage() {
   const user = await requirePageUser();
   const { stats, recent, kits } = await withOrganizationContext(user.organizationId, user.id, async (db) => {
-    const [stats, requestPage, kits] = await Promise.all([
+    const [stats, requestPage, kitPage] = await Promise.all([
       dashboardStatsAggregated(db, user.organizationId),
       listRequestPage(db, user.organizationId, { limit: 8 }),
-      listKits(db, user.organizationId),
+      listKitsPage(db, user.organizationId, { limit: 6 }),
     ]);
-    return { stats, recent: requestPage.items, kits };
+    return { stats, recent: requestPage.items, kits: kitPage.items };
   });
 
   return (
@@ -98,12 +98,12 @@ export default async function DashboardPage() {
           )}
         </section>
         <section className="rounded-xl border border-[#e2e8f0] bg-white p-5">
-          <h2 className="mb-4 text-[14px] font-bold">Kits mais utilizados</h2>
+          <h2 className="mb-4 text-[14px] font-bold">Kits disponíveis</h2>
           {kits.length === 0 ? (
             <p className="text-[13px] text-[#475569]">Nenhum kit cadastrado.</p>
           ) : (
             <ul className="flex flex-col gap-3">
-              {kits.slice(0, 6).map((kit) => (
+              {kits.map((kit) => (
                 <li key={kit.id} className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px] font-semibold">{kit.name}</p>
