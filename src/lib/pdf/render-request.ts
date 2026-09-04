@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db/client";
 import { normalizeRequestCids } from "@/lib/cid10/catalog";
+import { getTussCodeTable } from "@/lib/db/code-tables";
 import { hydrateRequestDirect } from "@/lib/db/request-hydration";
 import * as repos from "@/lib/db/repos";
 import { fillPdf } from "@/lib/pdf/fill";
@@ -42,11 +43,21 @@ export async function renderRequestPdf(
     : null;
   if (!template) throw new Error("Template não encontrado nesta organização.");
 
-  const [mappings, repeaters] = await Promise.all([
+  const [mappings, repeaters, tussTable] = await Promise.all([
     repos.listMappings(db, user.organizationId, version.id),
     repos.listRepeaters(db, user.organizationId, version.id),
+    request.tussTableKey
+      ? getTussCodeTable(db, user.organizationId, request.tussTableKey)
+      : Promise.resolve(null),
   ]);
-  const finalizationIssues = validateRequestForFinalization({ request, template, version, mappings, repeaters });
+  const finalizationIssues = validateRequestForFinalization({
+    request,
+    template,
+    version,
+    tussTable,
+    mappings,
+    repeaters,
+  });
   const blockingIssue = finalizationIssues.find((issue) => issue.severity === "error");
   if (blockingIssue) throw new Error(blockingIssue.message);
 
