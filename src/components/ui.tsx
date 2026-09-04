@@ -1,5 +1,5 @@
 import Link, { type LinkProps } from "next/link";
-import { Children, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { Children, forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Icon, type IconName } from "@/components/icons";
 
 export { Modal } from "@/components/Modal";
@@ -51,17 +51,21 @@ export function ButtonLink({
   return <Link className={buttonClassName(variant, className)} {...props} />;
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
+  { className, ...props },
+  ref,
+) {
   return (
     <input
+      ref={ref}
       {...props}
       className={cn(
         "h-[41px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 text-[13px] text-[#0f172a] placeholder:text-[#64748b]",
-        props.className,
+        className,
       )}
     />
   );
-}
+});
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
