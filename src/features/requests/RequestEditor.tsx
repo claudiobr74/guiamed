@@ -186,10 +186,7 @@ export function RequestEditor({
 
   useEffect(() => {
     const query = procQuery.trim();
-    if (!request.tussTableKey || query.length < MIN_SEARCH_LENGTH) {
-      setProcResults([]);
-      return;
-    }
+    if (!request.tussTableKey || query.length < MIN_SEARCH_LENGTH) return;
     let cancelled = false;
     const searchTimer = setTimeout(() => {
       void searchRequestProceduresAction(request.id, query)
