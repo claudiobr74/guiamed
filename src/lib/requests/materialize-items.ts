@@ -1,4 +1,4 @@
-import { resolveProcedureCode } from "@/lib/codes";
+import { isCodeValidOn, resolveProcedureCode } from "@/lib/codes";
 import { parseQuantity } from "@/lib/quantity";
 import type { Procedure, ProcedureCode, RequestItem } from "@/types/domain";
 
@@ -29,11 +29,25 @@ function resolveRequestedOrDefault(input: {
 
   const requested = input.codes.find((code) => code.id === input.requestedId) ?? null;
   if (!requested) throw new RequestItemError("Código não localizado na base.");
+  if (requested.codeSystem.toUpperCase() !== "TUSS") {
+    throw new RequestItemError(`O código ${requested.code} não pertence ao sistema TUSS.`);
+  }
+  if (requested.procedureId !== input.procedureId) {
+    throw new RequestItemError(`O código ${requested.code} não está vinculado ao procedimento selecionado.`);
+  }
+  if (requested.tableKey !== input.tableKey) {
+    throw new RequestItemError(`O código ${requested.code} não pertence à Tabela TUSS escolhida.`);
+  }
+  if (!isCodeValidOn(requested, input.at)) {
+    throw new RequestItemError(`O código ${requested.code} não está vigente na data da solicitação.`);
+  }
+  if (requested.healthInsurerId !== null && requested.healthInsurerId !== input.healthInsurerId) {
+    throw new RequestItemError(`O código ${requested.code} não é compatível com o convênio selecionado.`);
+  }
+
   const validRequested = resolveProcedureCode([requested], resolveInput);
   if (!validRequested) {
-    throw new RequestItemError(
-      `O código ${requested.code} não pertence à Tabela TUSS escolhida, não está vigente ou não está vinculado ao procedimento.`,
-    );
+    throw new RequestItemError(`O código ${requested.code} não pode ser utilizado nesta solicitação.`);
   }
   return validRequested;
 }
