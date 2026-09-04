@@ -20,17 +20,18 @@ export function LoginForm() {
           <p className="mt-1 text-[13px] text-[#475569]">Preencha seus dados para continuar</p>
           <div className="mt-5 flex flex-col gap-4">
             <Field label="E-mail">
-              <Input name="email" type="email" autoComplete="email" required placeholder="ricardo.mendes@guiamed.com.br" />
+              <Input name="email" type="email" autoComplete="email" required placeholder="medico@clinica.com.br" />
             </Field>
             <div className="flex w-full flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-semibold text-[#475569]">Senha</label>
+                <label htmlFor="login-password" className="text-[12px] font-semibold text-[#475569]">Senha</label>
                 <Link href="/recuperar-senha" className="text-[12px] font-medium text-[#1e5fa6]">
                   Esqueci minha senha
                 </Link>
               </div>
               <div className="relative">
                 <Input
+                  id="login-password"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
@@ -48,7 +49,7 @@ export function LoginForm() {
               </div>
             </div>
           </div>
-          {state?.error ? <p className="mt-4 text-[12px] text-[#dc2626]">{state.error}</p> : null}
+          {state?.error ? <p role="alert" className="mt-4 text-[12px] text-[#dc2626]">{state.error}</p> : null}
           <Button type="submit" className="mt-5 w-full text-[14px]" disabled={pending}>
             {pending ? "Entrando…" : "Entrar"}
           </Button>
@@ -60,7 +61,7 @@ export function LoginForm() {
           </p>
         </div>
       </form>
-      <p className="text-[11px] text-[#94a3b8]">GuiaMed SaaS • v1.4.2 • Segurança Certificada</p>
+      <p className="text-[11px] text-[#64748b]">LizaCare • Inteligência que cuida</p>
     </div>
   );
 }

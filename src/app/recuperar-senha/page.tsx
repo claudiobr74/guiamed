@@ -29,7 +29,7 @@ export default function RecuperarSenhaPage() {
       >
         <h1 className="text-[18px] font-bold text-[#0f172a]">Recuperar senha</h1>
         <p className="mt-1 text-[13px] text-[#475569]">
-          Informe o e-mail da conta. Se ele existir no GuiaMed, enviaremos o link de redefinição.
+          Informe o e-mail da conta. Se ele existir na plataforma LizaCare, enviaremos o link de redefinição.
         </p>
         {sent ? (
           <p className="mt-5 rounded-lg bg-[#ecfdf5] px-3 py-2 text-[13px] text-[#16a34a]">

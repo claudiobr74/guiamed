@@ -3,6 +3,7 @@ import { firebaseWebApiKey } from "@/lib/firebase/config";
 import { normalizeEmail } from "@/lib/auth/email";
 import { getDb } from "@/lib/db/client";
 import { activeProfileToSession } from "@/lib/auth/profile";
+import { SEARCH_INDEX_VERSION } from "@/lib/search-index";
 import type { Profile, SessionUser } from "@/types/domain";
 
 const ACCOUNT_PROFILE_ERROR =
@@ -23,6 +24,8 @@ async function provisionOrganizationOwner(input: {
   }
   const now = new Date().toISOString();
   const orgRef = db.collection("organizations").doc();
+  // A organização nasce vazia. Marcá-la na versão atual é seguro porque todos
+  // os novos pacientes/procedimentos/códigos já são gravados com o índice.
   await orgRef.set({
     name: input.organizationName || "Clínica",
     cnpj: null,
@@ -31,6 +34,8 @@ async function provisionOrganizationOwner(input: {
     address: null,
     createdAt: now,
     updatedAt: now,
+    searchIndexVersion: SEARCH_INDEX_VERSION,
+    searchIndexedAt: now,
   });
   const profile = {
     organizationId: orgRef.id,

@@ -1,15 +1,15 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { PdfMapper } from "@/features/templates/PdfMapper";
 import { requirePageAdmin } from "@/lib/auth/page";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { getTemplateVersion, listMappings, listRepeaters } from "@/lib/db/repos";
-import { publicFileUrl } from "@/lib/storage";
+import { authenticatedFileUrl } from "@/lib/storage/path";
 import { notFound } from "next/navigation";
 
 export default async function MapperPage({ params }: { params: Promise<{ versionId: string }> }) {
   const user = await requirePageAdmin();
   const { versionId } = await params;
-  const data = await withRls(user.organizationId, user.id, async (db) => {
+  const data = await withOrganizationContext(user.organizationId, user.id, async (db) => {
     const version = await getTemplateVersion(db, user.organizationId, versionId);
     if (!version) return null;
     return {
@@ -25,7 +25,7 @@ export default async function MapperPage({ params }: { params: Promise<{ version
         version={data.version}
         initialMappings={data.mappings}
         initialRepeaters={data.repeaters}
-        fileUrl={publicFileUrl(data.version.filePath)}
+        fileUrl={authenticatedFileUrl(data.version.filePath)}
       />
     </AppShell>
   );

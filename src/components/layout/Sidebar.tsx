@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import type { SessionUser } from "@/types/domain";
 import { logoutAction } from "@/app/auth-actions";
 import { Icon, type IconName } from "@/components/icons";
@@ -25,6 +26,8 @@ const admin: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/configuracoes", label: "Configurações", icon: "settings" },
 ];
 
+const FOCUSABLE = "a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -39,20 +42,124 @@ export function Sidebar({ user }: { user: SessionUser }) {
 
   return (
     <aside className="flex h-full w-[240px] shrink-0 flex-col justify-between border-r border-[#e2e8f0] bg-white px-4 py-6">
+      <SidebarContent user={user} pathname={pathname} />
+    </aside>
+  );
+}
+
+export function MobileSidebar({ user }: { user: SessionUser }) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const panel = panelRef.current;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !panel) return;
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[#e2e8f0] bg-white lg:hidden"
+        aria-label="Abrir menu principal"
+        aria-expanded={open}
+        aria-controls="mobile-sidebar"
+        onClick={() => setOpen(true)}
+      >
+        <Icon name="list" size={18} />
+      </button>
+      {open ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            aria-label="Fechar menu principal"
+            onClick={() => setOpen(false)}
+          />
+          <aside
+            ref={panelRef}
+            id="mobile-sidebar"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu principal"
+            className="relative flex h-dvh w-[min(320px,88vw)] flex-col justify-between border-r border-[#e2e8f0] bg-white px-4 py-5 shadow-xl"
+          >
+            <div className="absolute right-3 top-3">
+              <button
+                type="button"
+                className="flex size-10 items-center justify-center rounded-lg hover:bg-[#f8fafc]"
+                aria-label="Fechar menu principal"
+                onClick={() => setOpen(false)}
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+            <SidebarContent user={user} pathname={pathname} onNavigate={() => setOpen(false)} />
+          </aside>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function SidebarContent({
+  user,
+  pathname,
+  onNavigate,
+}: {
+  user: SessionUser;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
       <div className="flex flex-col gap-6">
         <Logo href="/" size="sm" />
         <nav className="flex flex-col gap-4">
           <div>
-            <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#94a3b8]">OPERACIONAL</p>
+            <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#64748b]">OPERACIONAL</p>
             {operational.map((item) => (
-              <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} />
+              <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={onNavigate} />
             ))}
           </div>
           {user.role === "admin" ? (
             <div>
-              <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#94a3b8]">ADMINISTRAÇÃO</p>
+              <p className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-[#64748b]">ADMINISTRAÇÃO</p>
               {admin.map((item) => (
-                <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} />
+                <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={onNavigate} />
               ))}
             </div>
           ) : null}
@@ -72,7 +179,7 @@ export function Sidebar({ user }: { user: SessionUser }) {
           </button>
         </form>
       </div>
-    </aside>
+    </>
   );
 }
 
@@ -81,15 +188,19 @@ function NavItem({
   label,
   icon,
   active,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon: IconName;
   active: boolean;
+  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-3 rounded-md px-3 py-2 text-[13px]",
         active ? "bg-[#eff6ff] font-semibold text-[#1e5fa6]" : "font-medium text-[#475569] hover:bg-[#f8fafc]",

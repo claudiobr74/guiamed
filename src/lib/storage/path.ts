@@ -41,6 +41,18 @@ export function buildStoragePath(
 }
 
 /**
+ * URL interna para leitura autenticada. Nunca exponha a URL direta do storage
+ * para documentos clínicos; a rota /api/files revalida sessão, tenant e vínculo.
+ */
+export function authenticatedFileUrl(filePath: string): string {
+  const segments = filePath.split("/");
+  if (segments.length < 3 || segments.some((segment) => !isSafeSegment(segment))) {
+    throw new Error("Caminho de arquivo inválido.");
+  }
+  return `/api/files/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`;
+}
+
+/**
  * Autoriza apenas bucket/{organizationId}/objeto, comparando o segmento
  * completo da organização. Não usa correspondência parcial por substring.
  */

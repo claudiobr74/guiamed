@@ -45,16 +45,21 @@ export function JustificationDrawer({
   }
 
   return (
-    <aside className="flex h-full w-[420px] shrink-0 flex-col gap-5 overflow-hidden border-l border-[#e2e8f0] bg-white p-6">
+    <>
+      <button type="button" className="fixed inset-0 z-30 bg-black/30 xl:hidden" aria-label="Fechar gerador de justificativa" onClick={onClose} />
+      <aside role="dialog" aria-modal="true" aria-label="Gerar justificativa clínica" className="fixed inset-y-0 right-0 z-40 flex h-dvh w-full max-w-[420px] shrink-0 flex-col gap-5 overflow-hidden border-l border-[#e2e8f0] bg-white p-4 shadow-xl sm:p-6 xl:static xl:z-auto xl:h-full xl:shadow-none">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon name="sparkle" size={18} />
-          <h2 className="text-[16px] font-bold">Gerar justificativa com IA</h2>
+          <h2 className="text-[16px] font-bold">Gerar justificativa</h2>
         </div>
-        <button type="button" onClick={onClose} aria-label="Fechar">
+        <button type="button" autoFocus onClick={onClose} aria-label="Fechar">
           <Icon name="close" size={16} />
         </button>
       </div>
+      <p className="rounded-lg bg-[#f8fafc] px-3 py-2 text-[12px] text-[#475569]">
+        A LizaCare organiza apenas os fatos informados abaixo. Este gerador não usa IA nem cria informações clínicas por inferência.
+      </p>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
         <Field label="Sintomas">
           <Textarea value={form.symptoms} onChange={(e) => setForm((f) => ({ ...f, symptoms: e.target.value }))} className="min-h-16" />
@@ -89,7 +94,7 @@ export function JustificationDrawer({
           {busy ? "Gerando..." : "Gerar justificativa"}
         </Button>
         <p className="text-center text-[11px] text-[#475569]">
-          O texto gerado será inserido no campo de justificativa para sua revisão. Só entram fatos informados.
+          O texto será inserido no campo de justificativa para sua revisão. Só entram fatos informados.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {([
@@ -109,6 +114,7 @@ export function JustificationDrawer({
           ))}
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

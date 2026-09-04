@@ -2,7 +2,12 @@ import { cert, getApps, initializeApp, type App, type ServiceAccount } from "fir
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, firestoreDatabaseId } from "@/lib/firebase/config";
+import {
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  firebaseStorageBucketNames,
+  firestoreDatabaseId,
+} from "@/lib/firebase/config";
 
 export function hasFirebaseAdminCredentials(): boolean {
   return Boolean(
@@ -69,8 +74,50 @@ export function firebaseDb() {
   return firestore;
 }
 
-export function firebaseBucket() {
-  return getStorage(getApp()).bucket(FIREBASE_STORAGE_BUCKET);
+export function firebaseBucket(bucketName = FIREBASE_STORAGE_BUCKET) {
+  return getStorage(getApp()).bucket(bucketName);
+}
+
+function isMissingBucketError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? Number((error as { code?: unknown }).code)
+      : NaN;
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    code === 404 &&
+    (message.includes("specified bucket does not exist") ||
+      message.includes("bucket does not exist") ||
+      message.includes("bucket not found"))
+  );
+}
+
+/**
+ * Executa uma operação no bucket configurado e, somente quando o bucket em si
+ * não existe, tenta os formatos moderno e legado do Firebase. Não faz fallback
+ * para erros de objeto ausente/permissão, evitando esconder falhas reais.
+ */
+export async function withFirebaseBucket<T>(
+  operation: (bucket: ReturnType<typeof firebaseBucket>) => Promise<T>,
+): Promise<T> {
+  const names = firebaseStorageBucketNames();
+  let missingBucketError: unknown = null;
+  for (let index = 0; index < names.length; index += 1) {
+    try {
+      return await operation(firebaseBucket(names[index]));
+    } catch (error) {
+      if (!isMissingBucketError(error)) throw error;
+      missingBucketError = error;
+    }
+  }
+
+  console.error("Nenhum bucket Firebase Storage configurado foi encontrado", {
+    candidates: names,
+    error: missingBucketError instanceof Error ? missingBucketError.message : String(missingBucketError),
+  });
+  throw new Error(
+    "Firebase Storage não possui um bucket provisionado para este projeto. Ative o Cloud Storage no Firebase e confira NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET na Vercel.",
+  );
 }
 
 export function firebaseReadyMessage(): string {

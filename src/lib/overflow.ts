@@ -21,5 +21,5 @@ export function assertProcedureOverflow(selected: number, maxRows: number | null
 
 export function maxRowsFromRepeaters(repeaters: { maxRows: number }[]): number | null {
   if (repeaters.length === 0) return null;
-  return Math.max(...repeaters.map((r) => r.maxRows));
+  return repeaters.reduce((total, repeater) => total + repeater.maxRows, 0);
 }

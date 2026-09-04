@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { firebaseWebApiKey, firestoreDatabaseId } from "./config";
+import { firebaseStorageBucketNames, firebaseWebApiKey, firestoreDatabaseId } from "./config";
 
-describe("firebaseWebApiKey", () => {
+describe("firebase config", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -14,5 +14,20 @@ describe("firebaseWebApiKey", () => {
   it("aponta para o Firestore Native existente quando FIRESTORE_DATABASE_ID não está definido", () => {
     vi.stubEnv("FIRESTORE_DATABASE_ID", "");
     expect(firestoreDatabaseId()).toMatch(/^ai-studio-/);
+  });
+
+  it("prefere bucket Firebase moderno e mantém fallback legado", () => {
+    expect(firebaseStorageBucketNames("guiamed-918ee", "")).toEqual([
+      "guiamed-918ee.firebasestorage.app",
+      "guiamed-918ee.appspot.com",
+    ]);
+  });
+
+  it("tenta primeiro um bucket explicitamente configurado sem duplicar candidatos", () => {
+    expect(firebaseStorageBucketNames("guiamed-918ee", "custom-bucket.example")).toEqual([
+      "custom-bucket.example",
+      "guiamed-918ee.firebasestorage.app",
+      "guiamed-918ee.appspot.com",
+    ]);
   });
 });

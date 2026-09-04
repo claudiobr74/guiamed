@@ -1,0 +1,118 @@
+name: E2E authenticated
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    env:
+      E2E_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.E2E_FIREBASE_SERVICE_ACCOUNT }}
+      E2E_FIREBASE_API_KEY: ${{ secrets.E2E_FIREBASE_API_KEY }}
+      E2E_FIRESTORE_DATABASE_ID: ${{ secrets.E2E_FIRESTORE_DATABASE_ID }}
+      E2E_FIREBASE_STORAGE_BUCKET: ${{ secrets.E2E_FIREBASE_STORAGE_BUCKET }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+    steps:
+      - name: Check E2E configuration
+        id: check
+        shell: bash
+        run: |
+          if [[ -n "$E2E_FIREBASE_SERVICE_ACCOUNT" && \
+                -n "$E2E_FIREBASE_API_KEY" && \
+                -n "$E2E_FIRESTORE_DATABASE_ID" && \
+                -n "$E2E_FIREBASE_STORAGE_BUCKET" && \
+                -n "$E2E_USER_EMAIL" && \
+                -n "$E2E_USER_PASSWORD" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "E2E autenticado não configurado: o job browser-flow ficará explicitamente SKIPPED."
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+              echo "Execução manual exige os seis secrets E2E_* configurados."
+              exit 1
+            fi
+          fi
+
+  browser-flow:
+    needs: configuration
+    if: needs.configuration.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    env:
+      E2E_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.E2E_FIREBASE_SERVICE_ACCOUNT }}
+      E2E_FIREBASE_API_KEY: ${{ secrets.E2E_FIREBASE_API_KEY }}
+      E2E_FIRESTORE_DATABASE_ID: ${{ secrets.E2E_FIRESTORE_DATABASE_ID }}
+      E2E_FIREBASE_STORAGE_BUCKET: ${{ secrets.E2E_FIREBASE_STORAGE_BUCKET }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+      SESSION_SECRET: e2e-ci-session-secret-with-more-than-32-characters
+      E2E_BASE_URL: http://127.0.0.1:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure Firebase test project
+        shell: bash
+        run: |
+          export PROJECT_ID=$(node -e 'const s=JSON.parse(process.env.E2E_FIREBASE_SERVICE_ACCOUNT); if(!s.project_id) process.exit(2); process.stdout.write(s.project_id)')
+          node --input-type=module -e 'import { assertSafeE2EProject } from "./scripts/e2e-project-guard.mjs"; assertSafeE2EProject({ projectId: process.env.PROJECT_ID, databaseId: process.env.E2E_FIRESTORE_DATABASE_ID, storageBucket: process.env.E2E_FIREBASE_STORAGE_BUCKET });'
+          echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_FIREBASE_API_KEY=$E2E_FIREBASE_API_KEY" >> "$GITHUB_ENV"
+          echo "FIRESTORE_DATABASE_ID=$E2E_FIRESTORE_DATABASE_ID" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$E2E_FIREBASE_STORAGE_BUCKET" >> "$GITHUB_ENV"
+          echo "FIREBASE_SERVICE_ACCOUNT=$E2E_FIREBASE_SERVICE_ACCOUNT" >> "$GITHUB_ENV"
+
+      - name: Seed isolated Firebase tenant
+        run: node scripts/e2e-seed.mjs
+
+      - name: Install Chromium runner
+        shell: bash
+        run: |
+          pnpm add --global playwright@1.55.0
+          playwright install --with-deps chromium
+
+      - name: Start LizaCare
+        shell: bash
+        run: |
+          pnpm dev --hostname 127.0.0.1 > /tmp/guiamed-e2e.log 2>&1 &
+          echo $! > /tmp/guiamed-e2e.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/guiamed-e2e.log
+          exit 1
+
+      - name: Run authenticated clinical flow
+        shell: bash
+        run: NODE_PATH="$(pnpm root -g)" node scripts/e2e-flow.cjs
+
+      - name: Show application log on failure
+        if: failure()
+        shell: bash
+        run: cat /tmp/guiamed-e2e.log || true
+
+      - name: Upload E2E failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guiamed-e2e-failure
+          path: e2e-failure.png
+          if-no-files-found: ignore

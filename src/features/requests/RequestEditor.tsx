@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CODE_NOT_FOUND, DEFAULT_PROCEDURE_QUANTITY, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
+import { CODE_NOT_FOUND, type CidCode, type Doctor, type DocumentTemplate, type HealthInsurer, type Institution, type Patient, type Procedure, type ProcedureKit, type SurgicalRequest } from "@/types/domain";
 import { Badge, Button, Card, Field, Input, QuantityStepper, Select, Textarea } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { KitPickerModal } from "@/features/requests/KitPickerModal";
 import { JustificationDrawer } from "@/features/requests/JustificationDrawer";
 import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";
+import { searchRequestProceduresAction } from "@/features/requests/procedure-search-actions";
 import {
   duplicateRequestAction,
   generatePdfAction,
@@ -15,11 +16,16 @@ import {
   saveRequestAction,
   searchCidsAction,
   searchPatientsAction,
-  searchProceduresAction,
 } from "@/app/actions";
 import { parseQuantity } from "@/lib/quantity";
+import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
+import { resolveKitItemTussCode } from "@/lib/kits/resolve-kit-codes";
+import { resolveTemplateSelection } from "@/lib/templates/compatibility";
+import { maskCpf } from "@/lib/personal-data";
 
 const STEPS = ["Paciente", "Diagnóstico", "Procedimentos", "Justificativa", "Revisão"] as const;
+const SEARCH_DEBOUNCE_MS = 250;
+const MIN_SEARCH_LENGTH = 2;
 
 export function RequestEditor({
   initial,
@@ -29,6 +35,8 @@ export function RequestEditor({
   insurers,
   templates,
   kits,
+  kitProcedures,
+  initialStep = 0,
 }: {
   initial: SurgicalRequest;
   patients: Patient[];
@@ -37,12 +45,15 @@ export function RequestEditor({
   insurers: HealthInsurer[];
   templates: DocumentTemplate[];
   kits: ProcedureKit[];
+  kitProcedures: Procedure[];
+  initialStep?: number;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => Math.max(0, Math.min(STEPS.length - 1, Math.trunc(initialStep))));
   const [request, setRequest] = useState(initial);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [patientQuery, setPatientQuery] = useState("");
   const [patientResults, setPatientResults] = useState<Patient[]>(patients);
   const [procQuery, setProcQuery] = useState("");
@@ -55,6 +66,11 @@ export function RequestEditor({
   const [showGenerate, setShowGenerate] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestRef = useRef(initial);
+  const saveInFlight = useRef<Promise<boolean> | null>(null);
+  const saveQueued = useRef(false);
+  const skipAutosave = useRef(false);
+  const clientSequence = useRef(0);
 
   const selectedPatient = useMemo(
     () => patients.find((p) => p.id === request.patientId) ?? patientResults.find((p) => p.id === request.patientId) ?? request.patient,
@@ -62,10 +78,65 @@ export function RequestEditor({
   );
   const selectedDoctor = doctors.find((d) => d.id === request.doctorId) ?? request.doctor;
   const selectedInstitution = institutions.find((i) => i.id === request.institutionId) ?? request.institution;
+  const selectedInsurerName = insurers.find((insurer) => insurer.id === request.healthInsurerId)?.name
+    ?? selectedPatient?.healthInsurerName
+    ?? "—";
   const selectedTemplate = templates.find((t) => t.id === request.templateId);
+  const compatibleTemplates = useMemo(
+    () => resolveTemplateSelection({ templates, institutionId: request.institutionId, healthInsurerId: request.healthInsurerId, selectedTemplateId: request.templateId }).templates,
+    [templates, request.institutionId, request.healthInsurerId, request.templateId],
+  );
+  const kitProcedureById = useMemo(
+    () => new Map(kitProcedures.map((procedure) => [procedure.id, procedure])),
+    [kitProcedures],
+  );
+
+  const persist = useCallback(async (): Promise<boolean> => {
+    if (saveInFlight.current) {
+      saveQueued.current = true;
+      return saveInFlight.current;
+    }
+    const run = async () => {
+      do {
+        saveQueued.current = false;
+        const snapshot = requestRef.current;
+        const sequence = clientSequence.current;
+        setSaveState("saving");
+        try {
+          const saved = await saveRequestAction(snapshot);
+          const hasNewerClientChanges = clientSequence.current !== sequence;
+          const next = {
+            ...requestRef.current,
+            updatedAt: saved.updatedAt,
+            revision: saved.revision,
+            items: hasNewerClientChanges ? requestRef.current.items : saved.items,
+          };
+          requestRef.current = next;
+          skipAutosave.current = !hasNewerClientChanges;
+          setRequest(next);
+          setSaveState("saved");
+          setSaveError(null);
+          if (hasNewerClientChanges) saveQueued.current = true;
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(error instanceof Error ? error.message : "Erro ao salvar");
+          return false;
+        }
+      } while (saveQueued.current);
+      return true;
+    };
+    saveInFlight.current = run().finally(() => {
+      saveInFlight.current = null;
+    });
+    return saveInFlight.current;
+  }, []);
 
   useEffect(() => {
     if (request.status !== "draft") return;
+    if (skipAutosave.current) {
+      skipAutosave.current = false;
+      return;
+    }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       void persist();
@@ -73,32 +144,119 @@ export function RequestEditor({
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request]);
+  }, [persist, request]);
 
-  async function persist(): Promise<boolean> {
-    setSaveState("saving");
-    try {
-      await saveRequestAction(request);
-      setSaveState("saved");
-      setSaveError(null);
-      return true;
-    } catch (error) {
-      setSaveState("error");
-      setSaveError(error instanceof Error ? error.message : "Erro ao salvar");
-      return false;
-    }
-  }
+  useEffect(() => {
+    const query = patientQuery.trim();
+    if (query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchPatientsAction(query)
+        .then((results) => {
+          if (!cancelled) setPatientResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setPatientResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [patientQuery]);
+
+  useEffect(() => {
+    const query = cidQuery.trim();
+    if (query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchCidsAction(query)
+        .then((results) => {
+          if (!cancelled) setCidResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setCidResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [cidQuery]);
+
+  useEffect(() => {
+    const query = procQuery.trim();
+    if (!request.tussTableKey || query.length < MIN_SEARCH_LENGTH) return;
+    let cancelled = false;
+    const searchTimer = setTimeout(() => {
+      void searchRequestProceduresAction(request.id, query)
+        .then((results) => {
+          if (!cancelled) setProcResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setProcResults([]);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(searchTimer);
+    };
+  }, [procQuery, request.id, request.tussTableKey]);
 
   function patch(partial: Partial<SurgicalRequest>) {
-    setRequest((prev) => ({ ...prev, ...partial }));
+    clientSequence.current += 1;
+    const next = { ...requestRef.current, ...partial };
+    requestRef.current = next;
+    setRequest(next);
+    if (saveInFlight.current) saveQueued.current = true;
   }
 
-  async function onGenerate() {
+  function applyTemplateContext(institutionId: string | null, healthInsurerId: string | null) {
+    const resolved = resolveTemplateSelection({
+      templates,
+      institutionId,
+      healthInsurerId,
+      selectedTemplateId: request.templateId,
+    });
+    setTemplateNotice(
+      resolved.invalidated
+        ? "O template anterior não é compatível com a instituição ou o convênio selecionado e foi removido."
+        : null,
+    );
+    patch({
+      institutionId,
+      healthInsurerId,
+      templateId: resolved.templateId,
+      templateVersionId: resolved.templateVersionId,
+    });
+  }
+
+  function applyPatient(patient: Patient) {
+    const resolved = resolveTemplateSelection({
+      templates,
+      institutionId: request.institutionId,
+      healthInsurerId: patient.healthInsurerId,
+      selectedTemplateId: request.templateId,
+    });
+    setTemplateNotice(
+      resolved.invalidated
+        ? "O template anterior não é compatível com o convênio do paciente e foi removido."
+        : null,
+    );
+    patch({
+      patientId: patient.id,
+      patient,
+      healthInsurerId: patient.healthInsurerId,
+      templateId: resolved.templateId,
+      templateVersionId: resolved.templateVersionId,
+    });
+  }
+
+  async function onGenerate(statement: string) {
     setBusy(true);
     try {
       if (!(await persist())) return;
-      const doc = await generatePdfAction(request.id);
+      const doc = await generatePdfAction(request.id, { accepted: true, statement });
       router.push(`/guias/${request.id}/preview?doc=${doc.id}`);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Não foi possível gerar o PDF.");
@@ -111,13 +269,16 @@ export function RequestEditor({
     <div className="flex items-start gap-0">
     <div className="flex min-w-0 flex-1 flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ol className="flex flex-wrap items-center gap-4">
+        <ol className="flex w-full items-center gap-4 overflow-x-auto pb-1 xl:w-auto">
           {STEPS.map((label, index) => (
             <li key={label} className="flex items-center gap-2">
+              {index > 0 ? <span aria-hidden="true" className="text-[13px] text-[#cbd5e1]">›</span> : null}
               <button
                 type="button"
                 onClick={() => setStep(index)}
-                className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                aria-current={index === step ? "step" : undefined}
+                aria-label={`Etapa ${index + 1}: ${label}`}
+                className={`flex size-6 items-center justify-center rounded-full text-[10px] font-bold ${
                   index === step ? "bg-[#1e5fa6] text-white" : index < step ? "bg-[#16a34a] text-white" : "bg-[#f1f5f9] text-[#475569]"
                 }`}
               >
@@ -129,8 +290,8 @@ export function RequestEditor({
             </li>
           ))}
         </ol>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] text-[#94a3b8]">
+        <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto">
+          <span role="status" aria-live="polite" className="text-[12px] text-[#64748b]">
             {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : ""}
           </span>
           <Button variant="secondary" type="button" onClick={() => void persist()} disabled={request.status !== "draft"}>
@@ -164,18 +325,26 @@ export function RequestEditor({
           )}
         </div>
       </div>
-      {saveError ? <p className="rounded-lg bg-[#fee2e2] px-3 py-2 text-[13px] text-[#dc2626]">{saveError}</p> : null}
+      {saveError ? <p role="alert" className="rounded-lg bg-[#fee2e2] px-3 py-2 text-[13px] text-[#dc2626]">{saveError}</p> : null}
+      {templateNotice ? <p role="status" className="rounded-lg bg-[#fff7ed] px-3 py-2 text-[13px] text-[#b45309]">{templateNotice}</p> : null}
 
       {step === 0 ? (
         <div className="flex flex-col gap-5">
           <Card>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[14px] font-bold">Paciente</h2>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button type="button" className="text-[12px] font-semibold text-[#1e5fa6]" onClick={() => patch({ patientId: null, patient: null })}>
                   Trocar paciente
                 </button>
-                <Button variant="subtle" className="px-3 py-1.5 text-[11px]" type="button" onClick={() => setShowNewPatient((v) => !v)}>
+                <Button
+                  variant="subtle"
+                  className="px-3 py-1.5 text-[11px]"
+                  type="button"
+                  aria-expanded={showNewPatient}
+                  aria-controls="new-patient-form"
+                  onClick={() => setShowNewPatient((v) => !v)}
+                >
                   + Novo paciente
                 </Button>
               </div>
@@ -185,10 +354,11 @@ export function RequestEditor({
                 <Input
                   value={patientQuery}
                   placeholder="Nome ou CPF"
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const q = e.target.value;
                     setPatientQuery(q);
-                    setPatientResults(await searchPatientsAction(q));
+                    if (!q.trim()) setPatientResults(patients);
+                    else if (q.trim().length < MIN_SEARCH_LENGTH) setPatientResults([]);
                   }}
                 />
                 <ul className="mt-2 divide-y divide-[#e2e8f0] rounded-lg border border-[#e2e8f0]">
@@ -197,37 +367,37 @@ export function RequestEditor({
                       <button
                         type="button"
                         className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] hover:bg-[#eff6ff]"
-                        onClick={() => patch({ patientId: p.id, patient: p, healthInsurerId: p.healthInsurerId })}
+                        onClick={() => applyPatient(p)}
                       >
                         <span className="font-semibold">{p.fullName}</span>
-                        <span className="text-[#94a3b8]">{p.cpf ?? "sem CPF"}</span>
+                        <span className="text-[#64748b]">{p.cpf ? maskCpf(p.cpf) : "sem CPF"}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
               </Field>
             ) : (
-              <div className="flex items-center justify-between rounded-lg bg-[#eff6ff] p-4">
+              <div className="flex flex-col gap-3 rounded-lg bg-[#eff6ff] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[14px] font-bold text-[#1e5fa6]">{selectedPatient?.fullName}</p>
                   <p className="text-[12px] text-[#475569]">
-                    Nascimento: {selectedPatient?.birthDate ?? "—"} • CPF: {selectedPatient?.cpf ?? "—"}
+                    Nascimento: {selectedPatient?.birthDate ?? "—"} • CPF: {selectedPatient?.cpf ? maskCpf(selectedPatient.cpf) : "—"}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <p className="text-[13px] font-semibold">Convênio: {selectedPatient?.healthInsurerName ?? "—"}</p>
                   <p className="text-[11px] text-[#475569]">Carteirinha: {selectedPatient?.insuranceCard ?? "—"}</p>
                 </div>
               </div>
             )}
-            {showNewPatient ? <NewPatientForm onCreated={(p) => { patch({ patientId: p.id, patient: p }); setShowNewPatient(false); }} insurers={insurers} /> : null}
+            {showNewPatient ? <NewPatientForm onCreated={(p) => { applyPatient(p); setShowNewPatient(false); }} insurers={insurers} /> : null}
           </Card>
           <Card>
             <h2 className="mb-4 text-[14px] font-bold">Instituição / formulário</h2>
             <Field label="Instituição selecionada">
               <Select
                 value={request.institutionId ?? ""}
-                onChange={(e) => patch({ institutionId: e.target.value || null })}
+                onChange={(e) => applyTemplateContext(e.target.value || null, request.healthInsurerId)}
               >
                 <option value="">Selecione</option>
                 {institutions.map((i) => (
@@ -247,7 +417,7 @@ export function RequestEditor({
                 }}
               >
                 <option value="">Selecione o formulário original</option>
-                {templates.map((t) => (
+                {compatibleTemplates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                     {t.currentVersion ? ` — v${t.currentVersion.version}` : " (sem PDF)"}
@@ -275,13 +445,13 @@ export function RequestEditor({
               </Select>
             </Field>
             {selectedDoctor ? (
-              <div className="mt-4 flex gap-8 text-[13px]">
+              <div className="mt-4 flex flex-wrap gap-8 text-[13px]">
                 <div>
-                  <p className="text-[11px] text-[#94a3b8]">REGISTRO CRM</p>
+                  <p className="text-[11px] text-[#64748b]">REGISTRO CRM</p>
                   <p className="font-semibold">CRM {selectedDoctor.crm} - {selectedDoctor.crmState}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[#94a3b8]">RQE ESPECIALIDADE</p>
+                  <p className="text-[11px] text-[#64748b]">RQE ESPECIALIDADE</p>
                   <p className="font-semibold">{selectedDoctor.rqe ? `RQE ${selectedDoctor.rqe}` : "—"} {selectedDoctor.specialty ? `(${selectedDoctor.specialty})` : ""}</p>
                 </div>
               </div>
@@ -304,10 +474,10 @@ export function RequestEditor({
             <Input
               value={cidQuery}
               placeholder="Pesquisar diagnóstico ou CID..."
-              onChange={async (e) => {
+              onChange={(e) => {
                 const q = e.target.value;
                 setCidQuery(q);
-                setCidResults(await searchCidsAction(q));
+                if (q.trim().length < MIN_SEARCH_LENGTH) setCidResults([]);
               }}
             />
           </Field>
@@ -315,7 +485,12 @@ export function RequestEditor({
             {request.cids.map((cid) => (
               <span key={cid.codeSnapshot} className="flex items-center gap-2 rounded-full bg-[#eff6ff] px-3 py-1 text-[12px] text-[#1e5fa6]">
                 CID {cid.codeSnapshot} — {cid.descriptionSnapshot}
-                <button type="button" onClick={() => patch({ cids: request.cids.filter((c) => c.codeSnapshot !== cid.codeSnapshot) })}>
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded-full"
+                  aria-label={`Remover CID ${cid.codeSnapshot}`}
+                  onClick={() => patch({ cids: request.cids.filter((c) => c.codeSnapshot !== cid.codeSnapshot) })}
+                >
                   ×
                 </button>
               </span>
@@ -348,23 +523,46 @@ export function RequestEditor({
       ) : null}
 
       {step === 2 ? (
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
+        <div className="flex flex-col gap-4">
+          <section aria-labelledby="clinical-context-title" className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p id="clinical-context-title" className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">Contexto clínico</p>
+                <p className="mt-1 text-[13px] text-[#0f172a]">
+                  <span className="font-semibold">Diagnóstico:</span> {request.diagnosis?.trim() || "Não informado"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2" aria-label="CID selecionados">
+                  {request.cids.length > 0 ? request.cids.map((cid) => (
+                    <span key={cid.id} className="rounded-full bg-[#eff6ff] px-2.5 py-1 text-[11px] font-medium text-[#1e5fa6]">
+                      CID {cid.codeSnapshot} — {cid.descriptionSnapshot}
+                    </span>
+                  )) : <span className="text-[12px] text-[#b45309]">Nenhum CID selecionado.</span>}
+                </div>
+              </div>
+              <button type="button" className="text-[12px] font-semibold text-[#1e5fa6] hover:underline" onClick={() => setStep(1)}>
+                Editar diagnóstico
+              </button>
+            </div>
+          </section>
+          <Card>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h2 className="text-[14px] font-bold">Procedimentos solicitados</h2>
               <Badge tone="blue">{request.items.length} selecionados</Badge>
             </div>
-            <Button variant="ghost" type="button" onClick={() => setShowKit(true)}>
+            <Button variant="ghost" type="button" onClick={() => setShowKit(true)} disabled={!request.tussTableKey}>
               + Usar kit cirúrgico
             </Button>
           </div>
           <Input
+            aria-label="Buscar procedimento ou código TUSS"
+            disabled={!request.tussTableKey}
             value={procQuery}
-            placeholder="Buscar procedimento, TUSS ou código IPASGO..."
-            onChange={async (e) => {
+            placeholder={request.tussTableKey ? "Buscar procedimento ou código TUSS..." : "Selecione a Tabela TUSS antes de buscar"}
+            onChange={(e) => {
               const q = e.target.value;
               setProcQuery(q);
-              setProcResults(await searchProceduresAction(q));
+              if (q.trim().length < MIN_SEARCH_LENGTH) setProcResults([]);
             }}
           />
           {procResults.length > 0 ? (
@@ -375,8 +573,18 @@ export function RequestEditor({
                     type="button"
                     className="w-full px-3 py-2 text-left text-[13px] hover:bg-[#eff6ff]"
                     onClick={() => {
-                      const tuss = proc.codes.find((c) => c.codeSystem === "TUSS" && c.active) ?? null;
-                      const ipasgo = proc.codes.find((c) => c.codeSystem === "IPASGO" && c.active) ?? null;
+                      if (!request.tussTableKey) {
+                        setSaveError("Selecione a Tabela TUSS antes de adicionar procedimentos.");
+                        return;
+                      }
+                      const resolutionDate = new Date();
+                      const tuss = resolveProcedureCode(proc.codes, {
+                        procedureId: proc.id,
+                        codeSystem: "TUSS",
+                        at: resolutionDate,
+                        healthInsurerId: request.healthInsurerId,
+                        tableKey: request.tussTableKey,
+                      });
                       patch({
                         items: [
                           ...request.items,
@@ -386,10 +594,14 @@ export function RequestEditor({
                             procedureId: proc.id,
                             procedureName: proc.name,
                             tussCodeId: tuss?.id ?? null,
-                            ipasgoCodeId: ipasgo?.id ?? null,
+                            ipasgoCodeId: null,
                             tussCodeSnapshot: tuss?.code ?? null,
-                            ipasgoCodeSnapshot: ipasgo?.code ?? null,
-                            quantity: DEFAULT_PROCEDURE_QUANTITY,
+                            ipasgoCodeSnapshot: null,
+                            tussDescriptionSnapshot: tuss?.description ?? null,
+                            ipasgoDescriptionSnapshot: null,
+                            tussVersionSnapshot: tuss?.version ?? null,
+                            ipasgoVersionSnapshot: null,
+                            quantity: quantityForCodes(tuss),
                             laterality: null,
                             notes: null,
                             sortOrder: request.items.length,
@@ -406,58 +618,61 @@ export function RequestEditor({
               ))}
             </ul>
           ) : null}
-          <table className="mt-4 w-full text-left text-[13px]">
-            <thead className="text-[11px] uppercase text-[#94a3b8]">
-              <tr>
-                <th className="pb-2">Procedimento</th>
-                <th className="pb-2">TUSS</th>
-                <th className="pb-2">IPASGO</th>
-                <th className="pb-2">Quantidade</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {request.items.map((item, index) => (
-                <tr key={item.id} className="border-t border-[#e2e8f0]">
-                  <td className="py-3 font-semibold">{item.procedureName}</td>
-                  <td className="py-3">{item.tussCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
-                  <td className="py-3">{item.ipasgoCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
-                  <td className="py-3">
-                    <QuantityStepper
-                      value={item.quantity}
-                      onChange={(qty) => {
-                        const next = [...request.items];
-                        next[index] = { ...item, quantity: parseQuantity(qty) };
-                        patch({ items: next });
-                      }}
-                    />
-                  </td>
-                  <td className="py-3">
-                    <button
-                      type="button"
-                      className="text-[#dc2626]"
-                      onClick={() => patch({ items: request.items.filter((i) => i.id !== item.id) })}
-                    >
-                      Excluir
-                    </button>
-                  </td>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-[13px]">
+              <thead className="text-[11px] uppercase text-[#64748b]">
+                <tr>
+                  <th className="pb-2">Procedimento</th>
+                  <th className="pb-2">TUSS</th>
+                  <th className="pb-2">Quantidade</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {request.items.map((item, index) => (
+                  <tr key={item.id} className="border-t border-[#e2e8f0]">
+                    <td className="py-3 font-semibold">{item.procedureName}</td>
+                    <td className="py-3">{item.tussCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
+                    <td className="py-3">
+                      <QuantityStepper
+                        value={item.quantity}
+                        label={`quantidade de ${item.procedureName}`}
+                        onChange={(qty) => {
+                          const next = [...request.items];
+                          next[index] = { ...item, quantity: parseQuantity(qty) };
+                          patch({ items: next });
+                        }}
+                      />
+                    </td>
+                    <td className="py-3">
+                      <button
+                        type="button"
+                        className="text-[#dc2626]"
+                        aria-label={`Excluir procedimento ${item.procedureName}`}
+                        onClick={() => patch({ items: request.items.filter((i) => i.id !== item.id) })}
+                      >
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          </Card>
+        </div>
       ) : null}
 
       {step === 3 ? (
         <Card>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Icon name="file-text" size={16} />
               <h2 className="text-[14px] font-bold">Justificativa clínica</h2>
             </div>
             <Button variant="ghost" type="button" onClick={() => setShowAi(true)}>
               <Icon name="sparkle" size={12} />
-              Gerar com IA
+              Gerar justificativa
             </Button>
           </div>
           <Field label="Achados / exames / tratamentos prévios (opcional)">
@@ -481,24 +696,34 @@ export function RequestEditor({
       {step === 4 ? (
         <Card>
           <h2 className="mb-4 text-[14px] font-bold">Revisão</h2>
+          <p className="mb-4 rounded-lg bg-[#eff6ff] px-3 py-2 text-[12px] text-[#1e5fa6]">
+            Confira convênio, CID, códigos e quantidades. A validação definitiva do template e do PDF será executada ao finalizar.
+          </p>
           <dl className="grid grid-cols-1 gap-3 text-[13px] md:grid-cols-2">
-            <div><dt className="text-[#94a3b8]">Paciente</dt><dd className="font-semibold">{selectedPatient?.fullName ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Médico</dt><dd className="font-semibold">{selectedDoctor?.name ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
-            <div><dt className="text-[#94a3b8]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Paciente</dt><dd className="font-semibold">{selectedPatient?.fullName ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Médico</dt><dd className="font-semibold">{selectedDoctor?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Convênio</dt><dd className="font-semibold">{selectedInsurerName}</dd></div>
+            <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Tabela TUSS</dt><dd className="font-semibold">{request.tussTableName ?? "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
             <div className="md:col-span-2">
-              <dt className="text-[#94a3b8]">Procedimentos</dt>
+              <dt className="text-[#64748b]">Procedimentos</dt>
               <dd>
-                <ul>
+                <ul className="mt-1 space-y-2">
                   {request.items.map((i) => (
-                    <li key={i.id}>{i.procedureName} — qtd {i.quantity} — TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND}</li>
+                    <li key={i.id} className="rounded-lg border border-[#e2e8f0] px-3 py-2">
+                      <p className="font-semibold">{i.procedureName}</p>
+                      <p className="mt-1 text-[12px] text-[#475569]">
+                        Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND}
+                      </p>
+                    </li>
                   ))}
                 </ul>
               </dd>
             </div>
-            <div className="md:col-span-2"><dt className="text-[#94a3b8]">Justificativa</dt><dd className="whitespace-pre-wrap">{request.clinicalJustification || "—"}</dd></div>
+            <div className="md:col-span-2"><dt className="text-[#64748b]">Justificativa</dt><dd className="whitespace-pre-wrap">{request.clinicalJustification || "—"}</dd></div>
           </dl>
           {request.status === "finalized" ? (
             <form action={duplicateRequestAction.bind(null, request.id)} className="mt-4">
@@ -524,20 +749,48 @@ export function RequestEditor({
       kits={kits}
       onClose={() => setShowKit(false)}
       onSelect={(kit) => {
-        const items = kit.items.map((item, index) => ({
-          id: crypto.randomUUID(),
-          requestId: request.id,
-          procedureId: item.procedureId,
-          procedureName: item.procedureName,
-          tussCodeId: null,
-          ipasgoCodeId: null,
-          tussCodeSnapshot: null,
-          ipasgoCodeSnapshot: null,
-          quantity: item.defaultQuantity || DEFAULT_PROCEDURE_QUANTITY,
-          laterality: null,
-          notes: item.notes,
-          sortOrder: request.items.length + index,
-        }));
+        const tableKey = request.tussTableKey;
+        if (!tableKey) {
+          setSaveState("error");
+          setSaveError("Selecione a Tabela TUSS antes de aplicar um kit.");
+          return;
+        }
+        const missingProcedure = kit.items.find((item) => !kitProcedureById.has(item.procedureId));
+        if (missingProcedure) {
+          setSaveState("error");
+          setSaveError(`O procedimento ${missingProcedure.procedureName} deste kit não está mais disponível.`);
+          return;
+        }
+        const resolutionDate = new Date();
+        const items = kit.items.map((item, index) => {
+          const procedure = kitProcedureById.get(item.procedureId);
+          if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
+          const tuss = resolveKitItemTussCode({
+            procedure,
+            item,
+            healthInsurerId: request.healthInsurerId,
+            tableKey,
+            at: resolutionDate,
+          });
+          return {
+            id: crypto.randomUUID(),
+            requestId: request.id,
+            procedureId: procedure.id,
+            procedureName: procedure.name,
+            tussCodeId: tuss?.id ?? null,
+            ipasgoCodeId: null,
+            tussCodeSnapshot: tuss?.code ?? null,
+            ipasgoCodeSnapshot: null,
+            tussDescriptionSnapshot: tuss?.description ?? null,
+            ipasgoDescriptionSnapshot: null,
+            tussVersionSnapshot: tuss?.version ?? null,
+            ipasgoVersionSnapshot: null,
+            quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss)),
+            laterality: null,
+            notes: item.notes,
+            sortOrder: request.items.length + index,
+          };
+        });
         patch({ items: [...request.items, ...items] });
         setShowKit(false);
       }}
@@ -551,9 +804,9 @@ export function RequestEditor({
       template={selectedTemplate}
       busy={busy}
       onClose={() => setShowGenerate(false)}
-      onConfirm={() => {
+      onConfirm={(statement) => {
         setShowGenerate(false);
-        void onGenerate();
+        void onGenerate(statement);
       }}
     />
     </div>
@@ -569,6 +822,7 @@ function NewPatientForm({
 }) {
   return (
     <form
+      id="new-patient-form"
       className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2"
       onSubmit={async (e) => {
         e.preventDefault();

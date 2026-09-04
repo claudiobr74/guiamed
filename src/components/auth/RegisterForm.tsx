@@ -40,7 +40,7 @@ export function RegisterForm() {
           </Link>
         </p>
       </form>
-      <p className="text-[11px] text-[#94a3b8]">GuiaMed SaaS • v1.4.2 • Segurança Certificada</p>
+      <p className="text-[11px] text-[#64748b]">LizaCare • Inteligência que cuida</p>
     </div>
   );
 }

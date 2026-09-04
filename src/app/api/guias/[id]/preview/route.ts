@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current";
-import { withRls } from "@/lib/db/client";
+import { withOrganizationContext } from "@/lib/db/client";
 import { renderRequestPdf } from "@/lib/pdf/render-request";
 
 export async function GET(
@@ -18,7 +18,7 @@ export async function GET(
   }
 
   try {
-    const rendered = await withRls(user.organizationId, user.id, (db) =>
+    const rendered = await withOrganizationContext(user.organizationId, user.id, (db) =>
       renderRequestPdf(db, user, id),
     );
     return new NextResponse(Buffer.from(rendered.bytes), {

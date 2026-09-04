@@ -29,8 +29,8 @@ export function KitPickerModal({
   const selected = filtered.find((k) => k.id === selectedId) ?? filtered[0] ?? null;
 
   return (
-    <Modal open={open} onClose={onClose} widthClassName="w-[960px]">
-      <div className="flex h-[min(680px,80vh)] flex-col gap-6">
+    <Modal open={open} onClose={onClose} widthClassName="w-[960px]" ariaLabel="Kits de procedimentos">
+      <div className="flex max-h-[82dvh] min-h-0 flex-col gap-4 sm:gap-6 lg:h-[min(680px,80vh)]">
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-[18px] font-bold text-[#0f172a]">Kits de procedimentos</h2>
@@ -48,14 +48,14 @@ export function KitPickerModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filtrar kits por nome, especialidade ou procedimento..."
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#94a3b8]"
+            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#64748b]"
           />
         </label>
         {filtered.length === 0 ? (
           <p className="text-[13px] text-[#475569]">Nenhum kit cadastrado ou encontrado.</p>
         ) : (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
-            <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-auto">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto lg:flex-row lg:gap-6 lg:overflow-hidden">
+            <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-3 sm:grid-cols-2 lg:overflow-auto">
               {filtered.map((kit) => {
                 const active = selected?.id === kit.id;
                 return (
@@ -82,7 +82,7 @@ export function KitPickerModal({
                 );
               })}
             </div>
-            <aside className="flex w-[340px] shrink-0 flex-col gap-4 overflow-auto rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-5">
+            <aside className="flex w-full shrink-0 flex-col gap-4 overflow-auto rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 lg:w-[340px] lg:p-5">
               <p className="text-[13px] font-bold">Procedimentos Inclusos</p>
               {selected?.items.map((item) => (
                 <div
@@ -98,11 +98,11 @@ export function KitPickerModal({
             </aside>
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-[#e2e8f0] pt-3">
-          <p className="text-[12px] text-[#94a3b8]">
+        <div className="flex flex-col gap-3 border-t border-[#e2e8f0] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] text-[#64748b]">
             * Os itens selecionados preencherão automaticamente a etapa 3 do formulário.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 sm:flex-nowrap">
             <Button variant="secondary" type="button" onClick={onClose}>
               Cancelar
             </Button>

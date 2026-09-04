@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { OverflowError, assertProcedureOverflow } from "@/lib/overflow";
+import { OverflowError, assertProcedureOverflow, maxRowsFromRepeaters } from "@/lib/overflow";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { fillPdf } from "@/lib/pdf/fill";
+import {
+  PdfAcroFormError,
+  PdfFontEncodingError,
+  PdfTextOverflowError,
+  fillPdf,
+} from "@/lib/pdf/fill";
 import type { FieldMapping, SurgicalRequest } from "@/types/domain";
 
 function request(items: number): SurgicalRequest {
@@ -18,6 +23,7 @@ function request(items: number): SurgicalRequest {
     clinicalJustification: "indicação informada",
     clinicalNotes: null,
     status: "draft",
+    revision: 0,
     createdBy: "u1",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -108,6 +114,45 @@ describe("PDF e overflow", () => {
     expect(filled.bytes.byteLength).toBeGreaterThan(bytes.length / 2);
   });
 
+  it("usa métricas reais em texto longo, com alinhamento e acentos latinos", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = {
+      ...clinicalRequest.patient!,
+      fullName: "João da Conceição",
+    };
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: clinicalRequest,
+      mappings: [
+        { ...simpleMapping, width: 90, alignment: "center", autoShrink: true },
+        { ...simpleMapping, y: 80, width: 90, alignment: "right", autoShrink: false },
+      ],
+      repeaters: [],
+    });
+    const out = await PDFDocument.load(filled.bytes);
+    expect(out.getPageCount()).toBe(1);
+    expect(filled.bytes.byteLength).toBeGreaterThan(0);
+  });
+
+  it("embute Unicode usado em português sem transliterar o conteúdo", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = {
+      ...clinicalRequest.patient!,
+      fullName: "João D’Ávila – São José ≥ 18",
+    };
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: clinicalRequest,
+      mappings: [{ ...simpleMapping, width: 280 }],
+      repeaters: [],
+    });
+    expect(filled.bytes.byteLength).toBeGreaterThan(0);
+  });
+
   it("multiline", async () => {
     const pdf = await PDFDocument.create();
     pdf.addPage([400, 600]);
@@ -120,22 +165,135 @@ describe("PDF e overflow", () => {
     expect(filled.bytes.byteLength).toBeGreaterThan(0);
   });
 
-  it("AcroForm", async () => {
+  it("bloqueia truncamento por limite de caracteres", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    await expect(
+      fillPdf({
+        templateBytes: await pdf.save(),
+        request: request(1),
+        mappings: [{ ...simpleMapping, maxCharacters: 5 }],
+        repeaters: [],
+      }),
+    ).rejects.toBeInstanceOf(PdfTextOverflowError);
+  });
+
+  it("bloqueia overflow horizontal e vertical sem remover conteúdo", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.clinicalJustification = "Texto clínico extenso que não pode ser truncado silenciosamente.";
+    await expect(
+      fillPdf({
+        templateBytes: await pdf.save(),
+        request: clinicalRequest,
+        mappings: [{
+          ...simpleMapping,
+          semanticField: "request.clinical_justification",
+          width: 30,
+          height: 10,
+          multiline: true,
+          autoShrink: false,
+        }],
+        repeaters: [],
+      }),
+    ).rejects.toThrow("A justificativa clínica excede o espaço disponível neste template.");
+  });
+
+  it("retorna erro amigável para glifo realmente ausente da fonte Unicode", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = { ...clinicalRequest.patient!, fullName: "Paciente 🧬" };
+    await expect(
+      fillPdf({
+        templateBytes: await pdf.save(),
+        request: clinicalRequest,
+        mappings: [simpleMapping],
+        repeaters: [],
+      }),
+    ).rejects.toBeInstanceOf(PdfFontEncodingError);
+  });
+
+  it("AcroForm preserva texto Unicode e atualiza a aparência com a fonte embarcada", async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([400, 600]);
     const form = pdf.getForm();
     const field = form.createTextField("patient_name");
-    field.addToPage(page, { x: 40, y: 500, width: 200, height: 16 });
+    field.addToPage(page, { x: 40, y: 500, width: 240, height: 16 });
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     form.updateFieldAppearances(font);
+    const clinicalRequest = request(1);
+    clinicalRequest.patient = { ...clinicalRequest.patient!, fullName: "João D’Ávila – ≥ 18" };
     const filled = await fillPdf({
       templateBytes: await pdf.save(),
-      request: request(1),
-      mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "patient_name" }],
+      request: clinicalRequest,
+      mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "patient_name", width: 240 }],
       repeaters: [],
     });
     const out = await PDFDocument.load(filled.bytes);
-    expect(out.getForm().getTextField("patient_name").getText()).toContain("Paciente");
+    expect(out.getForm().getTextField("patient_name").getText()).toBe("João D’Ávila – ≥ 18");
+  });
+
+  it("bloqueia overflow no limite nativo de um TextField AcroForm", async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 600]);
+    const field = pdf.getForm().createTextField("patient_name");
+    field.setMaxLength(5);
+    field.addToPage(page, { x: 40, y: 500, width: 200, height: 16 });
+    await expect(
+      fillPdf({
+        templateBytes: await pdf.save(),
+        request: request(1),
+        mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "patient_name" }],
+        repeaters: [],
+      }),
+    ).rejects.toBeInstanceOf(PdfTextOverflowError);
+  });
+
+  it("preenche checkbox, radio e dropdown por valores determinísticos", async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 600]);
+    const form = pdf.getForm();
+    const checkbox = form.createCheckBox("confirmado");
+    checkbox.addToPage(page, { x: 40, y: 500, width: 16, height: 16 });
+    const radio = form.createRadioGroup("sexo");
+    radio.addOptionToPage("F", page, { x: 70, y: 500, width: 16, height: 16 });
+    radio.addOptionToPage("M", page, { x: 90, y: 500, width: 16, height: 16 });
+    const dropdown = form.createDropdown("uf_crm");
+    dropdown.setOptions(["GO", "SP"]);
+    dropdown.addToPage(page, { x: 120, y: 500, width: 80, height: 16 });
+
+    const clinicalRequest = request(1);
+    clinicalRequest.diagnosis = "sim";
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: clinicalRequest,
+      mappings: [
+        { ...simpleMapping, mappingKind: "acroform", pdfFieldName: "confirmado", semanticField: "request.diagnosis" },
+        { ...simpleMapping, mappingKind: "acroform", pdfFieldName: "sexo", semanticField: "patient.sex" },
+        { ...simpleMapping, mappingKind: "acroform", pdfFieldName: "uf_crm", semanticField: "doctor.crm_state" },
+      ],
+      repeaters: [],
+    });
+
+    const outForm = (await PDFDocument.load(filled.bytes)).getForm();
+    expect(outForm.getCheckBox("confirmado").isChecked()).toBe(true);
+    expect(outForm.getRadioGroup("sexo").getSelected()).toBe("F");
+    expect(outForm.getDropdown("uf_crm").getSelected()).toEqual(["GO"]);
+  });
+
+  it("não converte erro AcroForm em overlay silencioso", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    await expect(
+      fillPdf({
+        templateBytes: await pdf.save(),
+        request: request(1),
+        mappings: [{ ...simpleMapping, mappingKind: "acroform", pdfFieldName: "campo_inexistente" }],
+        repeaters: [],
+      }),
+    ).rejects.toBeInstanceOf(PdfAcroFormError);
   });
 
   it("procedimento repetido e overflow no repeater", async () => {
@@ -162,6 +320,31 @@ describe("PDF e overflow", () => {
         ],
       }),
     ).rejects.toThrow(/suporta até 5 procedimentos/);
+  });
+
+  it("continua procedimentos em múltiplos repeaters sem falso overflow", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 600]);
+    pdf.addPage([400, 600]);
+    const repeaters = [1, 2].map((page) => ({
+      id: `rep-${page}`,
+      templateVersionId: "v1",
+      source: "procedures" as const,
+      page,
+      startX: 40,
+      startY: 200,
+      rowHeight: 16,
+      maxRows: 5,
+      columns: [{ field: "name", x: 40, width: 200 }],
+    }));
+    expect(maxRowsFromRepeaters(repeaters)).toBe(10);
+    const filled = await fillPdf({
+      templateBytes: await pdf.save(),
+      request: request(7),
+      mappings: [],
+      repeaters,
+    });
+    expect((await PDFDocument.load(filled.bytes)).getPageCount()).toBe(2);
   });
 
   it("múltiplas páginas", async () => {

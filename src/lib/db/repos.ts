@@ -19,6 +19,10 @@ import type {
   SurgicalRequest,
   TemplateVersion,
 } from "@/types/domain";
+import { parseQuantity } from "@/lib/quantity";
+import { materializeRequestItems } from "@/lib/requests/materialize-items";
+import { nextRequestRevision } from "@/lib/requests/revision";
+import type { FinalizedRequestSnapshot } from "@/lib/requests/finalized-snapshot";
 
 function now() {
   return new Date().toISOString();
@@ -44,7 +48,7 @@ export async function listPatients(db: Db, orgId: string, q?: string): Promise<P
   const insurers = await listInsurers(db, orgId);
   const insurerName = new Map(insurers.map((i) => [i.id, i.name]));
   return snap.docs
-    .map((doc) => mapPatient(orgId, doc.id, doc.data(), insurerName.get(String(doc.data().healthInsurerId ?? "")) ?? null))
+    .map((doc) => mapPatientRecord(orgId, doc.id, doc.data(), insurerName.get(String(doc.data().healthInsurerId ?? "")) ?? null))
     .filter((p) => matchesQuery(`${p.fullName} ${p.cpf ?? ""}`, q))
     .sort((a, b) => a.fullName.localeCompare(b.fullName, "pt-BR"));
 }
@@ -58,7 +62,7 @@ export async function getPatient(db: Db, orgId: string, id: string): Promise<Pat
     const insurer = await orgCollection(db, orgId, "healthInsurers").doc(String(data.healthInsurerId)).get();
     insurerName = (insurer.data()?.name as string | null) ?? null;
   }
-  return mapPatient(orgId, snap.id, data, insurerName);
+  return mapPatientRecord(orgId, snap.id, data, insurerName);
 }
 
 export async function upsertPatient(
@@ -268,34 +272,49 @@ export async function insertCodesIdempotent(
     createdBy: userId,
     createdAt: now(),
     rowCount: payload.rows.length,
+    processedRows: 0,
+    status: "processing",
   });
-  const procedures = await listProcedures(db, orgId);
   let inserted = 0;
   let updated = 0;
-  for (const row of payload.rows) {
-    let procedureId: string | null = null;
-    if (row.procedureName) {
-      procedureId = procedures.find((p) => p.name.toLowerCase() === row.procedureName?.toLowerCase())?.id ?? null;
-    }
-    const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
-    const ref = orgCollection(db, orgId, "procedureCodes").doc(docId);
-    const existing = await ref.get();
-    await ref.set({
-      procedureId,
-      codeSystem: row.codeSystem,
-      code: row.code,
-      description: row.description,
-      validFrom: row.validFrom,
-      validUntil: row.validUntil,
-      version: row.version,
-      active: row.active,
-      metadata: {},
-      importBatchId: batchRef.id,
-      updatedAt: now(),
-    }, { merge: true });
-    if (existing.exists) updated += 1;
-    else inserted += 1;
+  const chunkSize = 400;
+  for (let offset = 0; offset < payload.rows.length; offset += chunkSize) {
+    const rows = payload.rows.slice(offset, offset + chunkSize);
+    const refs = rows.map((row) => {
+      const docId = `${row.codeSystem}_${row.code}_${row.version}`.replace(/[^\w.-]+/g, "_");
+      return orgCollection(db, orgId, "procedureCodes").doc(docId);
+    });
+    const existingSnapshots = await db.getAll(...refs);
+    const batch = db.batch();
+    rows.forEach((row, index) => {
+      const existing = existingSnapshots[index];
+      const existingData = existing.data();
+      batch.set(refs[index], {
+        // Importação nunca confirma vínculos automaticamente e nunca apaga um vínculo existente.
+        procedureId: (existingData?.procedureId as string | null | undefined) ?? null,
+        codeSystem: row.codeSystem,
+        code: row.code,
+        description: row.description,
+        validFrom: row.validFrom,
+        validUntil: row.validUntil,
+        version: row.version,
+        active: row.active,
+        healthInsurerId: (existingData?.healthInsurerId as string | null | undefined) ?? null,
+        defaultQuantity: parseQuantity(existingData?.defaultQuantity),
+        metadata: {
+          ...((existingData?.metadata as ProcedureCode["metadata"] | undefined) ?? {}),
+          importedProcedureName: row.procedureName,
+        },
+        importBatchId: batchRef.id,
+        updatedAt: now(),
+      }, { merge: true });
+      if (existing.exists) updated += 1;
+      else inserted += 1;
+    });
+    await batch.commit();
+    await batchRef.set({ processedRows: Math.min(offset + rows.length, payload.rows.length) }, { merge: true });
   }
+  await batchRef.set({ status: "completed", completedAt: now(), inserted, updated }, { merge: true });
   return { inserted, updated, batchId: batchRef.id };
 }
 
@@ -366,20 +385,19 @@ export async function listTemplates(db: Db, orgId: string): Promise<DocumentTemp
   }
   return snap.docs
     .map((doc) => {
-      const data = doc.data();
       return {
-        id: doc.id,
-        organizationId: orgId,
-        name: String(data.name ?? ""),
-        institutionId: (data.institutionId as string | null) ?? null,
-        healthInsurerId: (data.healthInsurerId as string | null) ?? null,
-        documentType: String(data.documentType ?? "surgical_request"),
-        active: Boolean(data.active ?? true),
+        ...mapTemplateRecord(orgId, doc.id, doc.data()),
         currentVersion: byTemplate.get(doc.id) ?? null,
         versions: (versionsByTemplate.get(doc.id) ?? []).sort((a, b) => b.version - a.version),
       } satisfies DocumentTemplate;
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+export async function getTemplate(db: Db, orgId: string, id: string): Promise<DocumentTemplate | null> {
+  const snap = await orgCollection(db, orgId, "templates").doc(id).get();
+  if (!snap.exists) return null;
+  return mapTemplateRecord(orgId, snap.id, snap.data() ?? {});
 }
 
 export async function getTemplateVersion(db: Db, orgId: string, id: string): Promise<TemplateVersion | null> {
@@ -408,6 +426,10 @@ export async function createTemplateVersion(
   },
 ): Promise<{ templateId: string; versionId: string; version: number }> {
   const templateId = data.templateId ?? orgCollection(db, orgId, "templates").doc().id;
+  if (data.templateId) {
+    const ownedTemplate = await orgCollection(db, orgId, "templates").doc(data.templateId).get();
+    if (!ownedTemplate.exists) throw new Error("Template não encontrado nesta organização.");
+  }
   await orgCollection(db, orgId, "templates").doc(templateId).set({
     name: data.name,
     institutionId: data.institutionId ?? null,
@@ -416,7 +438,10 @@ export async function createTemplateVersion(
     active: true,
     updatedAt: now(),
   }, { merge: true });
-  const existing = await db.collection("templateVersions").where("templateId", "==", templateId).get();
+  const existing = await db.collection("templateVersions")
+    .where("organizationId", "==", orgId)
+    .where("templateId", "==", templateId)
+    .get();
   const version = existing.docs.reduce((max, doc) => Math.max(max, Number(doc.data().version ?? 0)), 0) + 1;
   await Promise.all(
     existing.docs.map((doc) => doc.ref.set({ active: false }, { merge: true })),
@@ -532,6 +557,7 @@ export async function hydrateRequest(db: Db, orgId: string, id: string): Promise
     clinicalJustification: (data.clinicalJustification as string | null) ?? null,
     clinicalNotes: (data.clinicalNotes as string | null) ?? null,
     status: (data.status as RequestStatus) ?? "draft",
+    revision: Number(data.revision ?? 0),
     createdBy: (data.createdBy as string | null) ?? null,
     createdAt: String(data.createdAt ?? now()),
     updatedAt: String(data.updatedAt ?? now()),
@@ -561,6 +587,7 @@ export async function createDraft(db: Db, user: SessionUser): Promise<string> {
     clinicalJustification: null,
     clinicalNotes: null,
     status: "draft",
+    revision: 0,
     createdBy: user.id,
     createdAt: now(),
     updatedAt: now(),
@@ -573,26 +600,42 @@ export async function createDraft(db: Db, user: SessionUser): Promise<string> {
   return ref.id;
 }
 
-export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequest): Promise<void> {
-  const snap = await orgCollection(db, user.organizationId, "requests").doc(request.id).get();
-  if (!snap.exists) throw new Error("Solicitação não encontrada.");
-  if (snap.data()?.status !== "draft") {
-    throw new Error("Documento finalizado não pode ser alterado. Duplique para criar uma nova versão.");
-  }
-  await orgCollection(db, user.organizationId, "requests").doc(request.id).set({
-    patientId: request.patientId,
-    doctorId: request.doctorId,
-    institutionId: request.institutionId,
-    healthInsurerId: request.healthInsurerId,
-    templateId: request.templateId,
-    templateVersionId: request.templateVersionId,
-    diagnosis: request.diagnosis,
-    clinicalJustification: request.clinicalJustification,
-    clinicalNotes: request.clinicalNotes,
+export async function saveDraft(db: Db, user: SessionUser, request: SurgicalRequest): Promise<{ updatedAt: string; revision: number; items: SurgicalRequest["items"] }> {
+  const procedures = await listProcedures(db, user.organizationId);
+  const codes = procedures.flatMap((procedure) => procedure.codes);
+  const items = materializeRequestItems({
+    requestId: request.id,
     items: request.items,
-    cids: request.cids,
-    updatedAt: now(),
-  }, { merge: true });
+    procedures,
+    codes,
+    healthInsurerId: request.healthInsurerId,
+  });
+  const requestRef = orgCollection(db, user.organizationId, "requests").doc(request.id);
+  const updatedAt = now();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(requestRef);
+    if (!snap.exists) throw new Error("Solicitação não encontrada.");
+    if (snap.data()?.status !== "draft") {
+      throw new Error("Documento finalizado não pode ser alterado. Duplique para criar uma nova versão.");
+    }
+    const revision = nextRequestRevision(request.revision, snap.data()?.revision);
+    transaction.set(requestRef, {
+      patientId: request.patientId,
+      doctorId: request.doctorId,
+      institutionId: request.institutionId,
+      healthInsurerId: request.healthInsurerId,
+      templateId: request.templateId,
+      templateVersionId: request.templateVersionId,
+      diagnosis: request.diagnosis,
+      clinicalJustification: request.clinicalJustification,
+      clinicalNotes: request.clinicalNotes,
+      items,
+      cids: request.cids,
+      revision,
+      updatedAt,
+    }, { merge: true });
+  });
+  return { updatedAt, revision: request.revision + 1, items };
 }
 
 export async function cancelRequest(db: Db, user: SessionUser, requestId: string): Promise<void> {
@@ -608,6 +651,7 @@ export async function duplicateRequest(db: Db, user: SessionUser, requestId: str
   const id = await createDraft(db, user);
   source.id = id;
   source.status = "draft";
+  source.revision = 0;
   source.duplicatedFromId = requestId;
   source.finalizedAt = null;
   await saveDraft(db, user, source);
@@ -627,8 +671,11 @@ export async function finalizeWithGeneratedDocument(
     requestId: string;
     templateVersionId: string;
     expectedRequestUpdatedAt: string;
+    expectedRequestRevision: number;
     filePath: string;
     fileHash: string;
+    requestSnapshot: FinalizedRequestSnapshot;
+    confirmationStatement: string;
   },
 ): Promise<GeneratedDocument> {
   const requestRef = orgCollection(db, user.organizationId, "requests").doc(data.requestId);
@@ -648,18 +695,31 @@ export async function finalizeWithGeneratedDocument(
         "A solicitação foi alterada durante a geração. Revise os dados e tente novamente.",
       );
     }
+    if (Number(request.data()?.revision ?? 0) !== data.expectedRequestRevision) {
+      throw new Error("A guia foi alterada desde a última revisão. Revise novamente antes de gerar.");
+    }
+
+    const medicalConfirmation = {
+      userId: user.id,
+      statement: data.confirmationStatement,
+      confirmedAt: createdAt,
+      requestRevision: data.expectedRequestRevision,
+    };
 
     transaction.set(documentRef, {
+      organizationId: user.organizationId,
       requestId: data.requestId,
       templateVersionId: data.templateVersionId,
       filePath: data.filePath,
       fileHash: data.fileHash,
       createdAt,
       createdBy: user.id,
+      requestSnapshot: data.requestSnapshot,
+      medicalConfirmation,
     });
     transaction.set(
       requestRef,
-      { status: "finalized", finalizedAt: createdAt, updatedAt: createdAt },
+      { status: "finalized", finalizedAt: createdAt, updatedAt: createdAt, medicalConfirmation },
       { merge: true },
     );
     transaction.set(finalizeAuditRef, {
@@ -748,7 +808,7 @@ export async function audit(
   });
 }
 
-function mapPatient(orgId: string, id: string, data: DocumentData, insurerName: string | null): Patient {
+export function mapPatientRecord(orgId: string, id: string, data: DocumentData, insurerName: string | null): Patient {
   return {
     id,
     organizationId: orgId,
@@ -834,6 +894,8 @@ function mapCode(id: string, data: DocumentData): ProcedureCode {
     validUntil: data.validUntil ? String(data.validUntil).slice(0, 10) : null,
     version: String(data.version ?? ""),
     active: data.active !== false,
+    healthInsurerId: (data.healthInsurerId as string | null) ?? null,
+    defaultQuantity: parseQuantity(data.defaultQuantity),
     metadata: (data.metadata as ProcedureCode["metadata"]) ?? {},
   };
 }
@@ -853,5 +915,17 @@ function mapVersion(id: string, data: DocumentData): TemplateVersion {
     active: Boolean(data.active),
     createdAt: String(data.createdAt ?? now()),
     createdBy: (data.createdBy as string | null) ?? null,
+  };
+}
+
+function mapTemplateRecord(orgId: string, id: string, data: DocumentData): DocumentTemplate {
+  return {
+    id,
+    organizationId: orgId,
+    name: String(data.name ?? ""),
+    institutionId: (data.institutionId as string | null) ?? null,
+    healthInsurerId: (data.healthInsurerId as string | null) ?? null,
+    documentType: String(data.documentType ?? "surgical_request"),
+    active: data.active !== false,
   };
 }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { firebaseBucket, hasFirebaseAdminCredentials } from "@/lib/firebase/admin";
+import { hasFirebaseAdminCredentials, withFirebaseBucket } from "@/lib/firebase/admin";
 import {
   buildStoragePath,
   requireAuthorizedStoragePath,
@@ -30,9 +30,8 @@ export async function putObject(
   const hash = createHash("sha256").update(bytes).digest("hex");
   const relative = buildStoragePath(bucket, organizationId, `${hash}-${filename}`);
   if (hasFirebaseAdminCredentials()) {
-    await firebaseBucket()
-      .file(relative)
-      .save(Buffer.from(bytes), {
+    await withFirebaseBucket((firebaseBucket) =>
+      firebaseBucket.file(relative).save(Buffer.from(bytes), {
         resumable: false,
         private: true,
         contentType: contentTypeFor(filename),
@@ -42,7 +41,8 @@ export async function putObject(
             bucket,
           },
         },
-      });
+      }),
+    );
   } else if (process.env.NODE_ENV === "production") {
     throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
   } else {
@@ -59,8 +59,10 @@ export async function getObject(
 ): Promise<Uint8Array> {
   const authorizedPath = requireAuthorizedStoragePath(filePath, organizationId);
   if (hasFirebaseAdminCredentials()) {
-    const [buf] = await firebaseBucket().file(authorizedPath).download();
-    return new Uint8Array(buf);
+    return withFirebaseBucket(async (firebaseBucket) => {
+      const [buf] = await firebaseBucket.file(authorizedPath).download();
+      return new Uint8Array(buf);
+    });
   }
   if (process.env.NODE_ENV === "production") {
     throw new Error("Firebase Storage exige credencial Admin em produção (projeto guiamed-918ee).");
@@ -76,7 +78,9 @@ export async function deleteObject(
 ): Promise<void> {
   const authorizedPath = requireAuthorizedStoragePath(filePath, organizationId);
   if (hasFirebaseAdminCredentials()) {
-    await firebaseBucket().file(authorizedPath).delete({ ignoreNotFound: true });
+    await withFirebaseBucket((firebaseBucket) =>
+      firebaseBucket.file(authorizedPath).delete({ ignoreNotFound: true }).then(() => undefined),
+    );
     return;
   }
   if (process.env.NODE_ENV === "production") {

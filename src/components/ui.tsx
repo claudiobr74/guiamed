@@ -1,8 +1,29 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import Link, { type LinkProps } from "next/link";
+import { Children, forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Icon, type IconName } from "@/components/icons";
+
+export { Modal } from "@/components/Modal";
 
 export function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
+}
+
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "subtle";
+
+const BUTTON_VARIANT_STYLES: Record<ButtonVariant, string> = {
+  primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#64748b]",
+  secondary: "bg-white text-[#475569] border border-[#e2e8f0] hover:bg-[#f8fafc]",
+  danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
+  ghost: "bg-transparent text-[#1e5fa6] hover:bg-[#eff6ff]",
+  subtle: "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]",
+};
+
+function buttonClassName(variant: ButtonVariant, className?: string) {
+  return cn(
+    "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition disabled:cursor-not-allowed",
+    BUTTON_VARIANT_STYLES[variant],
+    className,
+  );
 }
 
 export function Button({
@@ -10,45 +31,48 @@ export function Button({
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "subtle";
+  variant?: ButtonVariant;
 }) {
-  const styles = {
-    primary: "bg-[#1e5fa6] text-white hover:bg-[#184e89] disabled:bg-[#e2e8f0] disabled:text-[#94a3b8]",
-    secondary: "bg-white text-[#475569] border border-[#e2e8f0] hover:bg-[#f8fafc]",
-    danger: "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
-    ghost: "bg-transparent text-[#1e5fa6] hover:bg-[#eff6ff]",
-    subtle: "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]",
-  }[variant];
   return (
     <button
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition disabled:cursor-not-allowed",
-        styles,
-        className,
-      )}
+      className={buttonClassName(variant, className)}
       {...props}
     />
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+export function ButtonLink({
+  variant = "primary",
+  className,
+  ...props
+}: LinkProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> & {
+  variant?: ButtonVariant;
+}) {
+  return <Link className={buttonClassName(variant, className)} {...props} />;
+}
+
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
+  { className, ...props },
+  ref,
+) {
   return (
     <input
+      ref={ref}
       {...props}
       className={cn(
-        "h-[41px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8]",
-        props.className,
+        "h-[41px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 text-[13px] text-[#0f172a] placeholder:text-[#64748b]",
+        className,
       )}
     />
   );
-}
+});
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
       className={cn(
-        "min-h-[96px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8]",
+        "min-h-[96px] w-full rounded-lg border border-[#e2e8f0] bg-white px-3 py-2 text-[13px] text-[#0f172a] placeholder:text-[#64748b]",
         props.className,
       )}
     />
@@ -72,10 +96,15 @@ export function Label({ children }: { children: ReactNode }) {
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
+  const [control, ...supportingContent] = Children.toArray(children);
+
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <Label>{label}</Label>
-      {children}
+    <div className="flex w-full flex-col">
+      <label className="flex w-full flex-col gap-1.5">
+        <span className="text-[12px] font-semibold text-[#475569]">{label}</span>
+        {control}
+      </label>
+      {supportingContent}
     </div>
   );
 }
@@ -132,57 +161,27 @@ export function EmptyState({
   );
 }
 
-export function Modal({
-  open,
-  onClose,
-  children,
-  widthClassName = "w-[560px]",
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-  widthClassName?: string;
-}) {
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className={cn(
-          "max-h-[90vh] overflow-auto rounded-2xl bg-white p-8 shadow-[0_16px_16px_rgba(0,0,0,0.1)]",
-          widthClassName,
-        )}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export function QuantityStepper({
   value,
   onChange,
+  label = "quantidade",
 }: {
   value: number;
   onChange: (next: number) => void;
+  label?: string;
 }) {
   return (
     <div className="inline-flex items-center rounded-lg border border-[#e2e8f0]">
       <button
         type="button"
         className="h-9 w-9 text-[14px] text-[#475569]"
-        aria-label="Diminuir quantidade"
+        aria-label={`Diminuir ${label}`}
         onClick={() => onChange(Math.max(1, value - 1))}
       >
         −
       </button>
       <input
-        aria-label="Quantidade"
+        aria-label={label}
         className="h-9 w-12 border-x border-[#e2e8f0] text-center text-[13px] font-semibold"
         value={value}
         onChange={(e) => {
@@ -193,7 +192,7 @@ export function QuantityStepper({
       <button
         type="button"
         className="h-9 w-9 text-[14px] text-[#475569]"
-        aria-label="Aumentar quantidade"
+        aria-label={`Aumentar ${label}`}
         onClick={() => onChange(value + 1)}
       >
         +
