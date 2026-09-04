@@ -749,7 +749,8 @@ export function RequestEditor({
       kits={kits}
       onClose={() => setShowKit(false)}
       onSelect={(kit) => {
-        if (!request.tussTableKey) {
+        const tableKey = request.tussTableKey;
+        if (!tableKey) {
           setSaveState("error");
           setSaveError("Selecione a Tabela TUSS antes de aplicar um kit.");
           return;
@@ -768,7 +769,7 @@ export function RequestEditor({
             procedure,
             item,
             healthInsurerId: request.healthInsurerId,
-            tableKey: request.tussTableKey,
+            tableKey,
             at: resolutionDate,
           });
           return {
