@@ -85,6 +85,7 @@ export default async function GuiaPage({
             tables={data.tussTables}
           />
           <RequestEditor
+            key={data.request.tussTableKey ?? "no-tuss-table"}
             initial={data.request}
             patients={[]}
             doctors={data.doctors}
