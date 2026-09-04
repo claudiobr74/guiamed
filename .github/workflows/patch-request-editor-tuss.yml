@@ -1,0 +1,143 @@
+name: Patch RequestEditor TUSS-only
+
+on:
+  push:
+    branches:
+      - fix/core-clinical-workflow
+    paths:
+      - .github/workflows/patch-request-editor-tuss.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/core-clinical-workflow
+          fetch-depth: 0
+
+      - name: Apply exact RequestEditor patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/features/requests/RequestEditor.tsx")
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, label: str):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly 1 occurrence, found {count}")
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '  searchProceduresAction,\n',
+              '',
+              'remove legacy procedure search import',
+          )
+          replace_once(
+              'import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";\n',
+              'import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";\nimport { searchRequestProceduresAction } from "@/features/requests/procedure-search-actions";\n',
+              'add request-aware search import',
+          )
+          replace_once(
+              'import { resolveKitItemCodes } from "@/lib/kits/resolve-kit-codes";',
+              'import { resolveKitItemTussCode } from "@/lib/kits/resolve-kit-codes";',
+              'replace kit resolver import',
+          )
+
+          replace_once(
+              '''  useEffect(() => {\n    const query = procQuery.trim();\n    if (query.length < MIN_SEARCH_LENGTH) return;\n    let cancelled = false;\n    const searchTimer = setTimeout(() => {\n      void searchProceduresAction(query)\n        .then((results) => {\n          if (!cancelled) setProcResults(results);\n        })\n        .catch(() => {\n          if (!cancelled) setProcResults([]);\n        });\n    }, SEARCH_DEBOUNCE_MS);\n    return () => {\n      cancelled = true;\n      clearTimeout(searchTimer);\n    };\n  }, [procQuery]);''',
+              '''  useEffect(() => {\n    const query = procQuery.trim();\n    if (!request.tussTableKey || query.length < MIN_SEARCH_LENGTH) {\n      setProcResults([]);\n      return;\n    }\n    let cancelled = false;\n    const searchTimer = setTimeout(() => {\n      void searchRequestProceduresAction(request.id, query)\n        .then((results) => {\n          if (!cancelled) setProcResults(results);\n        })\n        .catch(() => {\n          if (!cancelled) setProcResults([]);\n        });\n    }, SEARCH_DEBOUNCE_MS);\n    return () => {\n      cancelled = true;\n      clearTimeout(searchTimer);\n    };\n  }, [procQuery, request.id, request.tussTableKey]);''',
+              'scope procedure search effect',
+          )
+
+          replace_once(
+              '<Button variant="ghost" type="button" onClick={() => setShowKit(true)}>',
+              '<Button variant="ghost" type="button" onClick={() => setShowKit(true)} disabled={!request.tussTableKey}>',
+              'disable kit without table',
+          )
+          replace_once(
+              'aria-label="Buscar procedimento, TUSS ou código IPASGO"',
+              'aria-label="Buscar procedimento ou código TUSS"',
+              'procedure search aria label',
+          )
+          replace_once(
+              'placeholder="Buscar procedimento, TUSS ou código IPASGO..."',
+              'placeholder={request.tussTableKey ? "Buscar procedimento ou código TUSS..." : "Selecione a Tabela TUSS antes de buscar"}',
+              'procedure search placeholder',
+          )
+          replace_once(
+              '''          <Input\n            aria-label="Buscar procedimento ou código TUSS"\n            value={procQuery}''',
+              '''          <Input\n            aria-label="Buscar procedimento ou código TUSS"\n            disabled={!request.tussTableKey}\n            value={procQuery}''',
+              'disable procedure search without table',
+          )
+
+          replace_once(
+              '''                      const resolutionDate = new Date();\n                      const tuss = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });\n                      const ipasgo = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });''',
+              '''                      if (!request.tussTableKey) {\n                        setSaveError("Selecione a Tabela TUSS antes de adicionar procedimentos.");\n                        return;\n                      }\n                      const resolutionDate = new Date();\n                      const tuss = resolveProcedureCode(proc.codes, {\n                        procedureId: proc.id,\n                        codeSystem: "TUSS",\n                        at: resolutionDate,\n                        healthInsurerId: request.healthInsurerId,\n                        tableKey: request.tussTableKey,\n                      });''',
+              'resolve direct procedure inside selected table',
+          )
+
+          # There are two item constructors (manual selection and kit application).
+          for old, new, expected, label in [
+              ('ipasgoCodeId: ipasgo?.id ?? null,', 'ipasgoCodeId: null,', 2, 'clear IPASGO ids'),
+              ('ipasgoCodeSnapshot: ipasgo?.code ?? null,', 'ipasgoCodeSnapshot: null,', 2, 'clear IPASGO snapshots'),
+              ('ipasgoDescriptionSnapshot: ipasgo?.description ?? null,', 'ipasgoDescriptionSnapshot: null,', 2, 'clear IPASGO descriptions'),
+              ('ipasgoVersionSnapshot: ipasgo?.version ?? null,', 'ipasgoVersionSnapshot: null,', 2, 'clear IPASGO versions'),
+          ]:
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{label}: expected {expected} occurrences, found {count}")
+              text = text.replace(old, new)
+
+          replace_once('quantity: quantityForCodes(tuss, ipasgo),', 'quantity: quantityForCodes(tuss),', 'manual quantity from TUSS only')
+          replace_once('<table className="w-full min-w-[720px] text-left text-[13px]">', '<table className="w-full min-w-[620px] text-left text-[13px]">', 'procedure table width')
+          replace_once('                  <th className="pb-2">IPASGO</th>\n', '', 'remove IPASGO header')
+          replace_once('                    <td className="py-3">{item.ipasgoCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>\n', '', 'remove IPASGO cell')
+
+          replace_once(
+              '''            <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>''',
+              '''            <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>\n            <div><dt className="text-[#64748b]">Tabela TUSS</dt><dd className="font-semibold">{request.tussTableName ?? "—"}</dd></div>''',
+              'show TUSS table in review',
+          )
+          replace_once(
+              'Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND} • IPASGO {i.ipasgoCodeSnapshot ?? CODE_NOT_FOUND}',
+              'Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND}',
+              'remove IPASGO from review',
+          )
+
+          replace_once(
+              '''      onSelect={(kit) => {\n        const missingProcedure = kit.items.find((item) => !kitProcedureById.has(item.procedureId));''',
+              '''      onSelect={(kit) => {\n        if (!request.tussTableKey) {\n          setSaveState("error");\n          setSaveError("Selecione a Tabela TUSS antes de aplicar um kit.");\n          return;\n        }\n        const missingProcedure = kit.items.find((item) => !kitProcedureById.has(item.procedureId));''',
+              'guard kit application',
+          )
+          replace_once(
+              '''          const { tuss, ipasgo } = resolveKitItemCodes({\n            procedure,\n            item,\n            healthInsurerId: request.healthInsurerId,\n            at: resolutionDate,\n          });''',
+              '''          const tuss = resolveKitItemTussCode({\n            procedure,\n            item,\n            healthInsurerId: request.healthInsurerId,\n            tableKey: request.tussTableKey,\n            at: resolutionDate,\n          });''',
+              'resolve kit TUSS inside selected table',
+          )
+          replace_once(
+              'quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss, ipasgo)),',
+              'quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss)),',
+              'kit quantity from TUSS only',
+          )
+
+          path.write_text(text)
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet -- src/features/requests/RequestEditor.tsx; then
+            echo "No patch produced" >&2
+            exit 1
+          fi
+          git config user.name "Claudio Marcio Macedo"
+          git config user.email "Claudiomacedo74@yahoo.com.br"
+          git add src/features/requests/RequestEditor.tsx
+          git commit -m "fix: align request editor with selected TUSS table"
+          git push origin HEAD:fix/core-clinical-workflow
