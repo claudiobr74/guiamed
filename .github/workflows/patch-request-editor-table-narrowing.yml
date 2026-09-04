@@ -42,3 +42,5 @@ jobs:
           git add src/features/requests/RequestEditor.tsx
           git commit -m "fix: preserve selected TUSS table in kit callback"
           git push origin HEAD:fix/core-clinical-workflow
+
+# one-shot workflow: remove after successful patch
