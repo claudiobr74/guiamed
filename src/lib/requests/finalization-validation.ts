@@ -1,4 +1,4 @@
-import type { DocumentTemplate, FieldMapping, PdfRepeater, SurgicalRequest, TemplateVersion } from "@/types/domain";
+import type { DocumentTemplate, FieldMapping, PdfRepeater, SurgicalRequest, TemplateVersion, TussCodeTable } from "@/types/domain";
 import { getCid10ByCode } from "@/lib/cid10/catalog";
 import { cidInformationalWarnings } from "@/lib/cid10/warnings";
 import { maxRowsFromRepeaters } from "@/lib/overflow";
@@ -17,10 +17,11 @@ export function validateRequestForFinalization(input: {
   request: SurgicalRequest;
   template: DocumentTemplate | null;
   version: TemplateVersion | null;
+  tussTable: TussCodeTable | null;
   mappings: FieldMapping[];
   repeaters: PdfRepeater[];
 }): FinalizationIssue[] {
-  const { request, template, version, mappings, repeaters } = input;
+  const { request, template, version, tussTable, mappings, repeaters } = input;
   const issues: FinalizationIssue[] = [];
   const error = (code: string, message: string, itemId?: string) => issues.push({ code, severity: "error", message, ...(itemId ? { itemId } : {}) });
   const warning = (code: string, message: string, itemId?: string) => issues.push({ code, severity: "warning", message, ...(itemId ? { itemId } : {}) });
@@ -41,9 +42,18 @@ export function validateRequestForFinalization(input: {
   if (template?.healthInsurerId && template.healthInsurerId !== request.healthInsurerId) error("TEMPLATE_INCOMPATIBLE", "O template não é compatível com o convênio selecionado.");
 
   if (request.items.length === 0) error("PROCEDURE_REQUIRED", "Adicione ao menos um procedimento.");
-  if (request.items.length > 0 && !request.tussTableKey?.trim()) {
+  const selectedTussTableKey = request.tussTableKey?.trim() ?? "";
+  if (request.items.length > 0 && !selectedTussTableKey) {
     error("TUSS_TABLE_REQUIRED", "Selecione a Tabela TUSS utilizada nesta guia.");
+  } else if (request.items.length > 0 && selectedTussTableKey) {
+    if (!tussTable || !tussTable.active || tussTable.key !== selectedTussTableKey) {
+      error(
+        "TUSS_TABLE_UNAVAILABLE",
+        "A Tabela TUSS selecionada não está mais disponível. Escolha uma tabela ativa e revise os procedimentos.",
+      );
+    }
   }
+
   const procedureCapacity = maxRowsFromRepeaters(repeaters);
   if (procedureCapacity !== null && request.items.length > procedureCapacity) {
     error("PROCEDURE_OVERFLOW", `Este template suporta até ${procedureCapacity} procedimentos. Foram selecionados ${request.items.length}.`);
