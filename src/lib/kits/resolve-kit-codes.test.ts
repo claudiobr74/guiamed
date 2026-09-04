@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveKitItemCodes } from "@/lib/kits/resolve-kit-codes";
+import { resolveKitItemCodes, resolveKitItemTussCode } from "@/lib/kits/resolve-kit-codes";
 import type { Procedure, ProcedureKitItem } from "@/types/domain";
 
 const procedure: Procedure = {
@@ -22,6 +22,8 @@ const procedure: Procedure = {
       validFrom: "2026-07-01",
       validUntil: null,
       active: true,
+      tableKey: "unimed-go",
+      tableName: "Unimed Goiânia",
       healthInsurerId: null,
       defaultQuantity: 1,
       metadata: {},
@@ -36,8 +38,26 @@ const procedure: Procedure = {
       validFrom: "2026-01-01",
       validUntil: null,
       active: true,
+      tableKey: "unimed-go",
+      tableName: "Unimed Goiânia",
       healthInsurerId: null,
       defaultQuantity: 2,
+      metadata: {},
+    },
+    {
+      id: "tuss-other-table",
+      procedureId: "procedure-1",
+      codeSystem: "TUSS",
+      code: "90000001",
+      description: "TUSS preferencial de outra tabela",
+      version: "2026.9",
+      validFrom: "2026-01-01",
+      validUntil: null,
+      active: true,
+      tableKey: "outra-tabela",
+      tableName: "Outra Tabela",
+      healthInsurerId: null,
+      defaultQuantity: 9,
       metadata: {},
     },
     {
@@ -85,7 +105,7 @@ function item(defaultCodeId: string | null): ProcedureKitItem {
 }
 
 describe("resolveKitItemCodes", () => {
-  it("preserva TUSS preferencial do kit e resolve IPASGO separadamente", () => {
+  it("preserva TUSS preferencial do kit e resolve IPASGO separadamente no modo legado", () => {
     const result = resolveKitItemCodes({
       procedure,
       item: item("tuss-preferred"),
@@ -96,7 +116,7 @@ describe("resolveKitItemCodes", () => {
     expect(result.ipasgo?.id).toBe("ipasgo-general");
   });
 
-  it("preserva IPASGO preferencial sem reutilizá-lo como TUSS", () => {
+  it("preserva IPASGO preferencial sem reutilizá-lo como TUSS no modo legado", () => {
     const result = resolveKitItemCodes({
       procedure,
       item: item("ipasgo-general"),
@@ -104,10 +124,10 @@ describe("resolveKitItemCodes", () => {
       at: new Date("2026-09-03T15:00:00-03:00"),
     });
     expect(result.ipasgo?.id).toBe("ipasgo-general");
-    expect(result.tuss?.id).toBe("tuss-general-new");
+    expect(result.tuss?.id).toBe("tuss-other-table");
   });
 
-  it("abandona preferência expirada e usa o resolvedor do mesmo sistema", () => {
+  it("abandona preferência expirada e usa o resolvedor do mesmo sistema no modo legado", () => {
     const result = resolveKitItemCodes({
       procedure,
       item: item("ipasgo-inactive"),
@@ -115,17 +135,41 @@ describe("resolveKitItemCodes", () => {
       at: new Date("2026-09-03T15:00:00-03:00"),
     });
     expect(result.ipasgo?.id).toBe("ipasgo-general");
-    expect(result.tuss?.id).toBe("tuss-general-new");
+    expect(result.tuss?.id).toBe("tuss-other-table");
   });
 
-  it("sem preferência usa somente a resolução determinística", () => {
+  it("sem preferência usa somente a resolução determinística no modo legado", () => {
     const result = resolveKitItemCodes({
       procedure,
       item: item(null),
       healthInsurerId: null,
       at: new Date("2026-09-03T15:00:00-03:00"),
     });
-    expect(result.tuss?.id).toBe("tuss-general-new");
+    expect(result.tuss?.id).toBe("tuss-other-table");
     expect(result.ipasgo?.id).toBe("ipasgo-general");
+  });
+});
+
+describe("resolveKitItemTussCode", () => {
+  it("preserva preferência quando ela pertence à tabela escolhida", () => {
+    const result = resolveKitItemTussCode({
+      procedure,
+      item: item("tuss-preferred"),
+      healthInsurerId: null,
+      tableKey: "unimed-go",
+      at: new Date("2026-09-03T15:00:00-03:00"),
+    });
+    expect(result?.id).toBe("tuss-preferred");
+  });
+
+  it("ignora preferência de outra tabela e resolve dentro da tabela escolhida", () => {
+    const result = resolveKitItemTussCode({
+      procedure,
+      item: item("tuss-other-table"),
+      healthInsurerId: null,
+      tableKey: "unimed-go",
+      at: new Date("2026-09-03T15:00:00-03:00"),
+    });
+    expect(result?.id).toBe("tuss-general-new");
   });
 });
