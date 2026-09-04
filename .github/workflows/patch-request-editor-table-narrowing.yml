@@ -29,10 +29,11 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit(f"kit guard occurrence count: {text.count(old)}")
           text = text.replace(old, new, 1)
-          old_call = '            tableKey: request.tussTableKey,\n'
-          if text.count(old_call) != 1:
-              raise SystemExit(f"tableKey call occurrence count: {text.count(old_call)}")
-          text = text.replace(old_call, '            tableKey,\n', 1)
+          old_block = '''          const tuss = resolveKitItemTussCode({\n            procedure,\n            item,\n            healthInsurerId: request.healthInsurerId,\n            tableKey: request.tussTableKey,\n            at: resolutionDate,\n          });'''
+          new_block = '''          const tuss = resolveKitItemTussCode({\n            procedure,\n            item,\n            healthInsurerId: request.healthInsurerId,\n            tableKey,\n            at: resolutionDate,\n          });'''
+          if text.count(old_block) != 1:
+              raise SystemExit(f"kit resolver block count: {text.count(old_block)}")
+          text = text.replace(old_block, new_block, 1)
           path.write_text(text)
       - name: Commit patch
         shell: bash
