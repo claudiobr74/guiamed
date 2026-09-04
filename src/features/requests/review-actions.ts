@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/current";
 import { normalizeRequestCids } from "@/lib/cid10/catalog";
 import { orgCollection, withOrganizationContext } from "@/lib/db/client";
+import { getTussCodeTable } from "@/lib/db/code-tables";
 import * as repos from "@/lib/db/repos";
 import { RequestChangedError } from "@/lib/requests/revision";
 import {
@@ -24,14 +25,19 @@ export async function reviewRequestAction(requestId: string, expectedRevision: n
     const version = request.templateVersionId
       ? await repos.getTemplateVersion(db, user.organizationId, request.templateVersionId)
       : null;
-    const [mappings, repeaters] = request.templateVersionId
-      ? await Promise.all([
-          repos.listMappings(db, user.organizationId, request.templateVersionId),
-          repos.listRepeaters(db, user.organizationId, request.templateVersionId),
-        ])
-      : [[], []];
+    const [mappings, repeaters, tussTable] = await Promise.all([
+      request.templateVersionId
+        ? repos.listMappings(db, user.organizationId, request.templateVersionId)
+        : Promise.resolve([]),
+      request.templateVersionId
+        ? repos.listRepeaters(db, user.organizationId, request.templateVersionId)
+        : Promise.resolve([]),
+      request.tussTableKey
+        ? getTussCodeTable(db, user.organizationId, request.tussTableKey)
+        : Promise.resolve(null),
+    ]);
 
-    const issues = validateRequestForFinalization({ request, template, version, mappings, repeaters });
+    const issues = validateRequestForFinalization({ request, template, version, tussTable, mappings, repeaters });
     const hasBlockingIssues = issues.some((issue) => issue.severity === "error");
     const requestRef = orgCollection(db, user.organizationId, "requests").doc(requestId);
     const validatedAt = new Date().toISOString();
