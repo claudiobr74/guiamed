@@ -7,6 +7,7 @@ function preferredForSystem(
   codeSystem: string,
   at: Date,
   healthInsurerId: string | null,
+  tableKey?: string | null,
 ): ProcedureCode | null {
   if (!item.defaultCodeId) return null;
   const preferred = procedure.codes.find((code) => code.id === item.defaultCodeId) ?? null;
@@ -16,13 +17,44 @@ function preferredForSystem(
     codeSystem,
     at,
     healthInsurerId,
+    tableKey,
   });
 }
 
 /**
- * Respeita o código preferencial legado do kit somente no seu próprio sistema.
- * Se ele deixou de ser vigente/compatível, usa o resolvedor determinístico do
- * sistema correspondente. Nunca reutiliza TUSS como IPASGO ou vice-versa.
+ * Resolve o TUSS de um item de kit exclusivamente dentro da tabela escolhida
+ * na guia. Uma preferência gravada no kit só é respeitada se continuar válida
+ * nessa mesma tabela; caso contrário o resolvedor determinístico escolhe outro
+ * TUSS válido da tabela, sem recorrer a IPASGO ou a outro catálogo.
+ */
+export function resolveKitItemTussCode(input: {
+  procedure: Procedure;
+  item: ProcedureKitItem;
+  healthInsurerId: string | null;
+  tableKey: string;
+  at?: Date;
+}): ProcedureCode | null {
+  const at = input.at ?? new Date();
+  const preferred = preferredForSystem(
+    input.procedure,
+    input.item,
+    "TUSS",
+    at,
+    input.healthInsurerId,
+    input.tableKey,
+  );
+  return preferred ?? resolveProcedureCode(input.procedure.codes, {
+    procedureId: input.procedure.id,
+    codeSystem: "TUSS",
+    at,
+    healthInsurerId: input.healthInsurerId,
+    tableKey: input.tableKey,
+  });
+}
+
+/**
+ * Compatibilidade legada para dados/testes anteriores ao modelo de tabela TUSS
+ * escolhida por guia. O fluxo clínico novo usa resolveKitItemTussCode.
  */
 export function resolveKitItemCodes(input: {
   procedure: Procedure;
