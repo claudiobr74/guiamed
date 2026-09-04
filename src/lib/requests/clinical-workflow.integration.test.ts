@@ -11,6 +11,8 @@ import type {
 } from "@/types/domain";
 
 const createdAt = "2026-09-02T00:00:00Z";
+const TABLE_KEY = "unimed-go";
+const TABLE_NAME = "Unimed Goiânia";
 
 function code(input: Partial<ProcedureCode> & Pick<ProcedureCode, "id" | "codeSystem" | "code">): ProcedureCode {
   return {
@@ -23,6 +25,8 @@ function code(input: Partial<ProcedureCode> & Pick<ProcedureCode, "id" | "codeSy
     validUntil: input.validUntil ?? null,
     version: input.version ?? "2026.1",
     active: input.active ?? true,
+    tableKey: input.tableKey ?? (input.codeSystem === "TUSS" ? TABLE_KEY : null),
+    tableName: input.tableName ?? (input.codeSystem === "TUSS" ? TABLE_NAME : null),
     healthInsurerId: input.healthInsurerId ?? null,
     defaultQuantity: input.defaultQuantity ?? 1,
     metadata: input.metadata ?? {},
@@ -32,7 +36,8 @@ function code(input: Partial<ProcedureCode> & Pick<ProcedureCode, "id" | "codeSy
 const codes: ProcedureCode[] = [
   code({ id: "tuss-general", codeSystem: "TUSS", code: "31403019", defaultQuantity: 2 }),
   code({ id: "tuss-insurer", codeSystem: "TUSS", code: "31403020", healthInsurerId: "insurer-1", version: "2026.2", defaultQuantity: 4 }),
-  code({ id: "ipasgo-general", codeSystem: "IPASGO", code: "IPG-001", defaultQuantity: 1 }),
+  code({ id: "tuss-other-table", codeSystem: "TUSS", code: "99999999", tableKey: "outra-tabela", tableName: "Outra Tabela", version: "2026.9", defaultQuantity: 9 }),
+  code({ id: "ipasgo-legacy", codeSystem: "IPASGO", code: "IPG-001", defaultQuantity: 1 }),
 ];
 
 const procedures: Procedure[] = [
@@ -85,6 +90,8 @@ function baseRequest(items: RequestItem[]): SurgicalRequest {
     healthInsurerId: "insurer-1",
     templateId: template.id,
     templateVersionId: version.id,
+    tussTableKey: TABLE_KEY,
+    tussTableName: TABLE_NAME,
     diagnosis: "Diagnóstico sintético",
     clinicalJustification: "Justificativa clínica revisada.",
     clinicalNotes: null,
@@ -152,14 +159,14 @@ function baseRequest(items: RequestItem[]): SurgicalRequest {
 }
 
 describe("fluxo clínico integrado", () => {
-  it("materializa catálogo confiável e passa pelos gates de finalização", () => {
+  it("materializa somente a Tabela TUSS escolhida e passa pelos gates de finalização", () => {
     const clientItem: RequestItem = {
       id: "item-1",
       requestId: "client-request",
       procedureId: "procedure-1",
       procedureName: "NOME ADULTERADO",
       tussCodeId: null,
-      ipasgoCodeId: null,
+      ipasgoCodeId: "ipasgo-legacy",
       tussCodeSnapshot: "FAKE",
       ipasgoCodeSnapshot: "FAKE",
       quantity: 4,
@@ -174,6 +181,7 @@ describe("fluxo clínico integrado", () => {
       procedures,
       codes,
       healthInsurerId: "insurer-1",
+      tussTableKey: TABLE_KEY,
       at: new Date("2026-09-02T12:00:00Z"),
     });
 
@@ -181,8 +189,8 @@ describe("fluxo clínico integrado", () => {
       procedureName: "Procedimento sintético",
       tussCodeId: "tuss-insurer",
       tussCodeSnapshot: "31403020",
-      ipasgoCodeId: "ipasgo-general",
-      ipasgoCodeSnapshot: "IPG-001",
+      ipasgoCodeId: null,
+      ipasgoCodeSnapshot: null,
       quantity: 4,
       sortOrder: 0,
     });
@@ -224,7 +232,6 @@ describe("fluxo clínico integrado", () => {
           maxRows: 10,
           columns: [
             { field: "tussCode", x: 0, width: 80 },
-            { field: "ipasgoCode", x: 80, width: 80 },
           ],
         },
       ],
@@ -262,6 +269,7 @@ describe("fluxo clínico integrado", () => {
         procedures,
         codes: [...codes, wrongInsurerCode],
         healthInsurerId: "insurer-1",
+        tussTableKey: TABLE_KEY,
         at: new Date("2026-09-02T12:00:00Z"),
       }),
     ).toThrow(/convênio selecionado/);
