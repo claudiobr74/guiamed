@@ -8,6 +8,7 @@ import { Icon } from "@/components/icons";
 import { KitPickerModal } from "@/features/requests/KitPickerModal";
 import { JustificationDrawer } from "@/features/requests/JustificationDrawer";
 import { GenerateConfirmModal } from "@/features/requests/GenerateConfirmModal";
+import { searchRequestProceduresAction } from "@/features/requests/procedure-search-actions";
 import {
   duplicateRequestAction,
   generatePdfAction,
@@ -15,11 +16,10 @@ import {
   saveRequestAction,
   searchCidsAction,
   searchPatientsAction,
-  searchProceduresAction,
 } from "@/app/actions";
 import { parseQuantity } from "@/lib/quantity";
 import { quantityForCodes, resolveProcedureCode } from "@/lib/codes";
-import { resolveKitItemCodes } from "@/lib/kits/resolve-kit-codes";
+import { resolveKitItemTussCode } from "@/lib/kits/resolve-kit-codes";
 import { resolveTemplateSelection } from "@/lib/templates/compatibility";
 import { maskCpf } from "@/lib/personal-data";
 
@@ -186,10 +186,13 @@ export function RequestEditor({
 
   useEffect(() => {
     const query = procQuery.trim();
-    if (query.length < MIN_SEARCH_LENGTH) return;
+    if (!request.tussTableKey || query.length < MIN_SEARCH_LENGTH) {
+      setProcResults([]);
+      return;
+    }
     let cancelled = false;
     const searchTimer = setTimeout(() => {
-      void searchProceduresAction(query)
+      void searchRequestProceduresAction(request.id, query)
         .then((results) => {
           if (!cancelled) setProcResults(results);
         })
@@ -201,7 +204,7 @@ export function RequestEditor({
       cancelled = true;
       clearTimeout(searchTimer);
     };
-  }, [procQuery]);
+  }, [procQuery, request.id, request.tussTableKey]);
 
   function patch(partial: Partial<SurgicalRequest>) {
     clientSequence.current += 1;
@@ -550,14 +553,15 @@ export function RequestEditor({
               <h2 className="text-[14px] font-bold">Procedimentos solicitados</h2>
               <Badge tone="blue">{request.items.length} selecionados</Badge>
             </div>
-            <Button variant="ghost" type="button" onClick={() => setShowKit(true)}>
+            <Button variant="ghost" type="button" onClick={() => setShowKit(true)} disabled={!request.tussTableKey}>
               + Usar kit cirúrgico
             </Button>
           </div>
           <Input
-            aria-label="Buscar procedimento, TUSS ou código IPASGO"
+            aria-label="Buscar procedimento ou código TUSS"
+            disabled={!request.tussTableKey}
             value={procQuery}
-            placeholder="Buscar procedimento, TUSS ou código IPASGO..."
+            placeholder={request.tussTableKey ? "Buscar procedimento ou código TUSS..." : "Selecione a Tabela TUSS antes de buscar"}
             onChange={(e) => {
               const q = e.target.value;
               setProcQuery(q);
@@ -572,9 +576,18 @@ export function RequestEditor({
                     type="button"
                     className="w-full px-3 py-2 text-left text-[13px] hover:bg-[#eff6ff]"
                     onClick={() => {
+                      if (!request.tussTableKey) {
+                        setSaveError("Selecione a Tabela TUSS antes de adicionar procedimentos.");
+                        return;
+                      }
                       const resolutionDate = new Date();
-                      const tuss = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "TUSS", at: resolutionDate, healthInsurerId: request.healthInsurerId });
-                      const ipasgo = resolveProcedureCode(proc.codes, { procedureId: proc.id, codeSystem: "IPASGO", at: resolutionDate, healthInsurerId: request.healthInsurerId });
+                      const tuss = resolveProcedureCode(proc.codes, {
+                        procedureId: proc.id,
+                        codeSystem: "TUSS",
+                        at: resolutionDate,
+                        healthInsurerId: request.healthInsurerId,
+                        tableKey: request.tussTableKey,
+                      });
                       patch({
                         items: [
                           ...request.items,
@@ -584,14 +597,14 @@ export function RequestEditor({
                             procedureId: proc.id,
                             procedureName: proc.name,
                             tussCodeId: tuss?.id ?? null,
-                            ipasgoCodeId: ipasgo?.id ?? null,
+                            ipasgoCodeId: null,
                             tussCodeSnapshot: tuss?.code ?? null,
-                            ipasgoCodeSnapshot: ipasgo?.code ?? null,
+                            ipasgoCodeSnapshot: null,
                             tussDescriptionSnapshot: tuss?.description ?? null,
-                            ipasgoDescriptionSnapshot: ipasgo?.description ?? null,
+                            ipasgoDescriptionSnapshot: null,
                             tussVersionSnapshot: tuss?.version ?? null,
-                            ipasgoVersionSnapshot: ipasgo?.version ?? null,
-                            quantity: quantityForCodes(tuss, ipasgo),
+                            ipasgoVersionSnapshot: null,
+                            quantity: quantityForCodes(tuss),
                             laterality: null,
                             notes: null,
                             sortOrder: request.items.length,
@@ -609,12 +622,11 @@ export function RequestEditor({
             </ul>
           ) : null}
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+            <table className="w-full min-w-[620px] text-left text-[13px]">
               <thead className="text-[11px] uppercase text-[#64748b]">
                 <tr>
                   <th className="pb-2">Procedimento</th>
                   <th className="pb-2">TUSS</th>
-                  <th className="pb-2">IPASGO</th>
                   <th className="pb-2">Quantidade</th>
                   <th />
                 </tr>
@@ -624,7 +636,6 @@ export function RequestEditor({
                   <tr key={item.id} className="border-t border-[#e2e8f0]">
                     <td className="py-3 font-semibold">{item.procedureName}</td>
                     <td className="py-3">{item.tussCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
-                    <td className="py-3">{item.ipasgoCodeSnapshot ?? <span className="text-[#b45309]">{CODE_NOT_FOUND}</span>}</td>
                     <td className="py-3">
                       <QuantityStepper
                         value={item.quantity}
@@ -697,6 +708,7 @@ export function RequestEditor({
             <div><dt className="text-[#64748b]">Instituição</dt><dd className="font-semibold">{selectedInstitution?.name ?? "—"}</dd></div>
             <div><dt className="text-[#64748b]">Convênio</dt><dd className="font-semibold">{selectedInsurerName}</dd></div>
             <div><dt className="text-[#64748b]">Template</dt><dd className="font-semibold">{selectedTemplate?.name ?? "—"}</dd></div>
+            <div><dt className="text-[#64748b]">Tabela TUSS</dt><dd className="font-semibold">{request.tussTableName ?? "—"}</dd></div>
             <div className="md:col-span-2"><dt className="text-[#64748b]">CID</dt><dd>{request.cids.map((c) => `${c.codeSnapshot} ${c.descriptionSnapshot}`).join("; ") || "—"}</dd></div>
             <div className="md:col-span-2"><dt className="text-[#64748b]">Diagnóstico</dt><dd>{request.diagnosis || "—"}</dd></div>
             <div className="md:col-span-2">
@@ -707,7 +719,7 @@ export function RequestEditor({
                     <li key={i.id} className="rounded-lg border border-[#e2e8f0] px-3 py-2">
                       <p className="font-semibold">{i.procedureName}</p>
                       <p className="mt-1 text-[12px] text-[#475569]">
-                        Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND} • IPASGO {i.ipasgoCodeSnapshot ?? CODE_NOT_FOUND}
+                        Quantidade {i.quantity} • TUSS {i.tussCodeSnapshot ?? CODE_NOT_FOUND}
                       </p>
                     </li>
                   ))}
@@ -740,6 +752,11 @@ export function RequestEditor({
       kits={kits}
       onClose={() => setShowKit(false)}
       onSelect={(kit) => {
+        if (!request.tussTableKey) {
+          setSaveState("error");
+          setSaveError("Selecione a Tabela TUSS antes de aplicar um kit.");
+          return;
+        }
         const missingProcedure = kit.items.find((item) => !kitProcedureById.has(item.procedureId));
         if (missingProcedure) {
           setSaveState("error");
@@ -750,10 +767,11 @@ export function RequestEditor({
         const items = kit.items.map((item, index) => {
           const procedure = kitProcedureById.get(item.procedureId);
           if (!procedure) throw new Error("Procedimento do kit não localizado na base.");
-          const { tuss, ipasgo } = resolveKitItemCodes({
+          const tuss = resolveKitItemTussCode({
             procedure,
             item,
             healthInsurerId: request.healthInsurerId,
+            tableKey: request.tussTableKey,
             at: resolutionDate,
           });
           return {
@@ -762,14 +780,14 @@ export function RequestEditor({
             procedureId: procedure.id,
             procedureName: procedure.name,
             tussCodeId: tuss?.id ?? null,
-            ipasgoCodeId: ipasgo?.id ?? null,
+            ipasgoCodeId: null,
             tussCodeSnapshot: tuss?.code ?? null,
-            ipasgoCodeSnapshot: ipasgo?.code ?? null,
+            ipasgoCodeSnapshot: null,
             tussDescriptionSnapshot: tuss?.description ?? null,
-            ipasgoDescriptionSnapshot: ipasgo?.description ?? null,
+            ipasgoDescriptionSnapshot: null,
             tussVersionSnapshot: tuss?.version ?? null,
-            ipasgoVersionSnapshot: ipasgo?.version ?? null,
-            quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss, ipasgo)),
+            ipasgoVersionSnapshot: null,
+            quantity: parseQuantity(item.defaultQuantity || quantityForCodes(tuss)),
             laterality: null,
             notes: item.notes,
             sortOrder: request.items.length + index,
