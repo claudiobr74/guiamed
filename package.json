@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prepare:cid10": "node scripts/prepare-cid10.mjs",
+    "predev": "npm run prepare:cid10",
     "dev": "tsx server.ts",
+    "prebuild": "npm run prepare:cid10",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
