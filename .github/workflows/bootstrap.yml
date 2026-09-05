@@ -1,0 +1,35 @@
+name: Bootstrap LizaCare baseline
+
+on:
+  push:
+    branches:
+      - simplify/lizacare-baseline
+    paths:
+      - ".bootstrap/**"
+      - ".github/workflows/bootstrap.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Rebuild clean LizaCare tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/lzx.* > /tmp/lizacare.b64
+          base64 -d /tmp/lizacare.b64 > /tmp/lizacare.tar.xz
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          tar -xJf /tmp/lizacare.tar.xz -C .
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: establish simple LizaCare baseline"
+          git push origin HEAD
