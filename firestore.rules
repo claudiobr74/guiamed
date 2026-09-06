@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsExisting() {
+      return signedIn() && resource.data.doctorId == request.auth.uid;
+    }
+
+    function ownsNew() {
+      return signedIn() && request.resource.data.doctorId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /patients/{patientId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    match /operators/{operatorId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    match /tables/{tableId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    match /procedures/{procedureId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    match /procedure_kits/{kitId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    match /templates/{templateId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+
+      match /chunks/{chunkId} {
+        allow read, delete: if signedIn()
+          && get(/databases/$(database)/documents/templates/$(templateId)).data.doctorId == request.auth.uid;
+        allow create, update: if signedIn()
+          && get(/databases/$(database)/documents/templates/$(templateId)).data.doctorId == request.auth.uid
+          && request.resource.data.doctorId == request.auth.uid;
+      }
+    }
+
+    match /requests/{requestId} {
+      allow read, delete: if ownsExisting();
+      allow update: if ownsExisting() && ownsNew();
+      allow create: if ownsNew();
+    }
+
+    // CID-10 contém apenas catálogo público e metadados de versão, sem dados clínicos.
+    match /cid10_versions/{versionId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cid10_records/{recordId} {
+      allow read, write: if signedIn();
+    }
+  }
+}
