@@ -50,8 +50,12 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-[12px] shadow-2xs border border-[#E2E8F0]">
         <div className="text-center">
-          <img src="/brand/lizacare-logo.webp" alt="Lizacare" className="h-44 mx-auto object-contain" />
-          <h2 className="mt-3 text-[18px] font-bold text-[#0F172A]">
+          <img
+            src="/brand/lizacare-logo-2026.webp"
+            alt="LizaCare"
+            className="w-full max-w-[360px] h-auto mx-auto object-contain"
+          />
+          <h2 className="mt-5 text-[18px] font-bold text-[#0F172A]">
             {isLogin ? 'Acesse sua conta médica' : 'Crie seu cadastro de médico'}
           </h2>
           <p className="mt-1 text-[13px] text-[#64748B]">
@@ -134,7 +138,7 @@ export default function Login() {
               {loading ? 'Aguarde...' : isLogin ? 'Entrar no Sistema' : 'Criar Minha Conta'}
             </Button>
           </div>
-          
+
           <div className="text-center pt-2">
             <button
               type="button"
