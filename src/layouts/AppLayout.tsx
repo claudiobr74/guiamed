@@ -19,7 +19,7 @@ export default function AppLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row text-[#0F172A] font-sans antialiased">
+    <div className="min-h-[100dvh] w-full overflow-x-hidden bg-[#F8FAFC] flex flex-col md:flex-row text-[#0F172A] font-sans antialiased">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -29,15 +29,16 @@ export default function AppLayout() {
       />
 
       {/* MOBILE TOP BAR */}
-      <header className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b border-[#E2E8F0] sticky top-0 z-40">
-        <Link to="/" className="flex items-center">
-          <img src="/brand/lizacare-logo.webp" alt="Logo" className="h-12 w-auto object-contain" />
+      <header className="md:hidden h-16 flex items-center justify-between px-3 sm:px-4 bg-white/95 backdrop-blur border-b border-[#E2E8F0] sticky top-0 z-40 safe-top">
+        <Link to="/" className="flex items-center min-w-0" onClick={() => setMobileMenuOpen(false)}>
+          <img src="/brand/lizacare-logo.webp" alt="LizaCare" className="h-10 w-auto max-w-[150px] object-contain" />
         </Link>
         <button
           type="button"
-          aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+          aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+          aria-expanded={mobileMenuOpen}
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-[6px] text-[#475569] hover:bg-[#F1F5F9] focus:outline-none"
+          className="h-11 w-11 inline-flex items-center justify-center rounded-[10px] text-[#475569] hover:bg-[#F1F5F9] active:bg-[#E2E8F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E5FA6]/20"
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -46,32 +47,33 @@ export default function AppLayout() {
       {/* MOBILE BACKDROP */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-xs z-40 md:hidden"
+          className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-[1px] z-40 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* SIDEBAR */}
       <aside
         className={cn(
-          "w-[240px] bg-white border-r border-[#E2E8F0] flex-shrink-0 flex flex-col py-6 px-4 z-50 transition-transform duration-200",
-          "fixed inset-y-0 left-0 md:static md:translate-x-0",
-          mobileMenuOpen ? "translate-x-0 shadow-xl" : "-translate-x-full md:translate-x-0"
+          'w-[280px] max-w-[86vw] md:w-[248px] md:max-w-none bg-white border-r border-[#E2E8F0] flex-shrink-0 flex flex-col px-3 md:px-4 z-50 transition-transform duration-200 ease-out',
+          'fixed inset-y-0 left-0 py-4 md:sticky md:top-0 md:h-screen md:py-6 md:translate-x-0',
+          mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         )}
       >
         {/* LOGO */}
-        <div className="mb-6 flex items-center justify-center">
-          <Link to="/" className="flex items-center justify-center">
+        <div className="mb-4 md:mb-6 flex items-center justify-center min-h-16 md:min-h-20">
+          <Link to="/" className="flex items-center justify-center" onClick={() => setMobileMenuOpen(false)}>
             <img
               src="/brand/lizacare-logo.webp"
-              alt="Logo"
-              className="h-32 w-32 object-contain"
+              alt="LizaCare"
+              className="h-20 md:h-24 w-auto max-w-[190px] object-contain"
             />
           </Link>
         </div>
 
         {/* NAVEGAÇÃO PRINCIPAL */}
-        <nav className="space-y-1">
+        <nav className="space-y-1" aria-label="Navegação principal">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
             return (
@@ -80,7 +82,7 @@ export default function AppLayout() {
                 to={item.href}
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-3 h-[36px] text-[13px] rounded-[6px] transition-colors select-none',
+                  'flex items-center gap-3 px-3 h-11 md:h-10 text-[13px] rounded-[8px] transition-colors select-none',
                   isActive
                     ? 'bg-[#EFF6FF] text-[#1E5FA6] font-semibold'
                     : 'text-[#475569] font-normal hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -88,7 +90,7 @@ export default function AppLayout() {
               >
                 <item.icon
                   className={cn(
-                    'w-4 h-4 shrink-0 transition-colors',
+                    'w-[18px] h-[18px] shrink-0 transition-colors',
                     isActive ? 'text-[#1E5FA6]' : 'text-[#94A3B8]'
                   )}
                 />
@@ -99,20 +101,20 @@ export default function AppLayout() {
         </nav>
 
         {/* RODAPÉ DA SIDEBAR */}
-        <div className="pt-4 mt-auto border-t border-[#E2E8F0]/60">
+        <div className="pt-4 mt-auto border-t border-[#E2E8F0]/60 safe-bottom">
           <button
             onClick={() => signOut()}
-            className="flex items-center gap-2.5 px-3 h-[34px] w-full text-[13px] text-[#475569] hover:text-[#DC2626] hover:bg-[#FEE2E2]/30 rounded-[6px] transition-colors"
+            className="flex items-center gap-2.5 px-3 h-11 md:h-10 w-full text-[13px] text-[#475569] hover:text-[#DC2626] hover:bg-[#FEE2E2]/30 rounded-[8px] transition-colors"
           >
-            <LogOut className="w-4 h-4 text-[#94A3B8]" />
+            <LogOut className="w-[18px] h-[18px] text-[#94A3B8]" />
             <span>Sair do sistema</span>
           </button>
         </div>
       </aside>
 
       {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 px-4 py-6 sm:px-8 sm:py-8 overflow-y-auto">
-        <div className="max-w-[1140px] mx-auto">
+      <main className="app-content flex-1 min-w-0 w-full px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8 overflow-x-hidden">
+        <div className="w-full min-w-0 max-w-[1320px] mx-auto">
           <Outlet />
         </div>
       </main>
