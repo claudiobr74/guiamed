@@ -50,11 +50,55 @@
   --focus-ring: 0 0 0 3px rgba(30, 95, 166, 0.12);
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
+html {
+  background: #F8FAFC;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
+  margin: 0;
   font-family: var(--font-sans);
   background-color: #F8FAFC;
   color: #0F172A;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+.app-content,
+.app-content > div,
+.app-content section,
+.app-content form {
+  min-width: 0;
+}
+
+.app-content img,
+.app-content canvas,
+.app-content svg {
+  max-width: 100%;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Custom scrollbar for modern medical UI */
@@ -74,4 +118,56 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+@media (max-width: 767px) {
+  .app-content {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  /* Avoid automatic zoom on iOS and improve typing comfort. */
+  .app-content input,
+  .app-content select,
+  .app-content textarea,
+  .app-content [data-ui="input"] {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable touch targets without making desktop controls bulky. */
+  .app-content [data-ui="button"] {
+    min-height: 40px;
+  }
+
+  .app-content [data-ui="card"] {
+    border-radius: 12px;
+  }
+
+  .app-content [data-ui="card-header"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .app-content [data-ui="card-content"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Prevent long medical codes and labels from breaking the viewport. */
+  .app-content p,
+  .app-content span,
+  .app-content h1,
+  .app-content h2,
+  .app-content h3,
+  .app-content h4,
+  .app-content td,
+  .app-content th {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-content {
+    padding-left: 36px;
+    padding-right: 36px;
+  }
 }
