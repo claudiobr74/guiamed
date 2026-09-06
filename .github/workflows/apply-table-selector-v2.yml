@@ -36,3 +36,5 @@ jobs:
           git add src/pages/NewRequest.tsx
           git commit -m "fix: select procedure table per request"
           git push origin HEAD
+
+# Touch to trigger after workflow registration.
