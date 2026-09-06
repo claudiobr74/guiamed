@@ -541,7 +541,7 @@ export default function NewRequest() {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto pb-20">
+    <div className="space-y-4 sm:space-y-5 max-w-5xl mx-auto pb-8 sm:pb-16">
       {/* PDF Preview Modal */}
       <PdfPreviewModal
         isOpen={!!previewPdfUrl}
@@ -636,7 +636,7 @@ export default function NewRequest() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-[#E2E8F0]">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">Nova Solicitação Médica</h1>
             <span className="text-[11px] font-semibold text-[#1E5FA6] bg-[#EFF6FF] border border-[#BFDBFE]/60 px-2 py-0.5 rounded-[4px]">
               TISS Oficial
@@ -644,19 +644,19 @@ export default function NewRequest() {
           </div>
           <p className="text-[13px] text-[#64748B] mt-0.5">Preencha os dados clínicos para preenchimento automático da guia oficial em PDF</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2 sm:gap-2.5">
           <Button
             variant="outline"
             onClick={handlePreviewPDF}
             disabled={isPreviewing}
-            className="h-[38px] text-[13px] font-medium"
+            className="h-[40px] w-full sm:w-auto text-[13px] font-medium"
           >
             <Eye className="mr-1.5 h-4 w-4 text-[#1E5FA6]" />
             {isPreviewing ? 'Carregando...' : 'Visualizar PDF'}
           </Button>
 
           <Button
-            className="h-[38px] text-[13px] font-semibold"
+            className="h-[40px] w-full sm:w-auto text-[13px] font-semibold"
             onClick={handleGenerateAndSave}
             disabled={isGenerating}
           >
@@ -668,7 +668,7 @@ export default function NewRequest() {
 
       {/* 1. Paciente */}
       <Card className="border-[#E2E8F0]">
-        <CardHeader className="py-3.5 px-5 border-b border-[#E2E8F0] flex flex-row items-center justify-between bg-[#F8FAFC]">
+        <CardHeader className="py-3.5 px-5 border-b border-[#E2E8F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-[#F8FAFC]">
           <div className="flex items-center gap-2">
             <span className="w-5 h-5 rounded-[4px] bg-[#1E5FA6] text-white text-[11px] font-bold flex items-center justify-center">1</span>
             <CardTitle className="text-[14px] font-semibold text-[#0F172A] flex items-center gap-1.5">
@@ -701,7 +701,7 @@ export default function NewRequest() {
           </div>
 
           {selectedPatient && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] p-3 rounded-[8px] text-[12px] text-[#334155] border border-[#E2E8F0]">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] p-3 rounded-[8px] text-[12px] text-[#334155] border border-[#E2E8F0]">
               <div>
                 <span className="text-[#64748B] text-[11px] block font-medium">CPF:</span>
                 <span className="font-mono font-semibold text-[#0F172A]">{selectedPatient.cpf || '-'}</span>
@@ -933,11 +933,11 @@ export default function NewRequest() {
             {selectedProcedures.map((proc, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between p-3 rounded-[8px] border transition-all ${
+                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-[8px] border transition-all ${
                   proc.isPrincipal ? 'bg-[#EFF6FF]/70 border-[#BFDBFE]' : 'bg-white border-[#E2E8F0]'
                 }`}
               >
-                <div className="flex-1 flex flex-col gap-1 pr-3 min-w-0">
+                <div className="flex-1 flex flex-col gap-1 pr-0 sm:pr-3 min-w-0 w-full">
                   <p className="font-semibold text-[13px] text-[#0F172A] flex items-center gap-2 flex-wrap">
                     {proc.isPrincipal && (
                       <span className="inline-flex items-center gap-1 bg-[#1E5FA6] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[4px]">
@@ -961,7 +961,7 @@ export default function NewRequest() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 w-full sm:w-auto border-t sm:border-t-0 border-[#E2E8F0] pt-2 sm:pt-0">
                   {/* Reordering */}
                   <div className="flex flex-col gap-0.5">
                     <button
@@ -1022,7 +1022,7 @@ export default function NewRequest() {
       {/* 5. OPME (Opcional) */}
       <Card className="border-[#E2E8F0]">
         <CardHeader
-          className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-row items-center justify-between transition-colors"
+          className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 transition-colors"
           onClick={() => setShowOpme(!showOpme)}
         >
           <div className="flex items-center gap-2">
@@ -1111,7 +1111,7 @@ export default function NewRequest() {
       {/* 6. Internação e Caráter de Atendimento (Opcional) */}
       <Card className="border-[#E2E8F0]">
         <CardHeader
-          className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-row items-center justify-between transition-colors"
+          className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 transition-colors"
           onClick={() => setShowHospitalization(!showHospitalization)}
         >
           <div className="flex items-center gap-2">
@@ -1213,8 +1213,8 @@ export default function NewRequest() {
       </Card>
 
       {/* Bottom Sticky Action Bar */}
-      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border border-[#E2E8F0] p-3.5 rounded-[10px] shadow-[0_4px_20px_rgba(15,23,42,0.08)] flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="sticky bottom-2 sm:bottom-0 z-30 bg-white/95 backdrop-blur-md border border-[#E2E8F0] p-2.5 sm:p-3.5 rounded-[12px] shadow-[0_4px_20px_rgba(15,23,42,0.10)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 safe-bottom">
+        <div className="hidden sm:flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="text-[#64748B]">
             Voltar
           </Button>
@@ -1225,19 +1225,19 @@ export default function NewRequest() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={handlePreviewPDF}
             disabled={isPreviewing}
-            className="h-[38px] text-[13px] font-medium text-[#1E5FA6] border-[#BFDBFE] hover:bg-[#EFF6FF]"
+            className="h-[40px] w-full sm:w-auto px-2 sm:px-4 text-[12px] sm:text-[13px] font-medium text-[#1E5FA6] border-[#BFDBFE] hover:bg-[#EFF6FF]"
           >
             <Eye className="mr-1.5 h-4 w-4" />
             {isPreviewing ? 'Carregando...' : 'Visualizar PDF'}
           </Button>
 
           <Button
-            className="h-[38px] px-5 text-[13px] font-semibold shadow-xs"
+            className="h-[40px] w-full sm:w-auto px-2 sm:px-5 text-[12px] sm:text-[13px] font-semibold shadow-xs"
             onClick={handleGenerateAndSave}
             disabled={isGenerating}
           >

@@ -105,14 +105,14 @@ export default function Patients() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1 border-b border-[#E2E8F0]">
         <div>
           <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">Pacientes</h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">Gerenciamento de prontuários rápidos para preenchimento automático</p>
         </div>
         {!isEditing && (
-          <Button onClick={() => startEditing()} className="h-[38px] text-[13px] font-semibold">
+          <Button onClick={() => startEditing()} className="h-[40px] w-full sm:w-auto text-[13px] font-semibold">
             <Plus className="mr-1.5 h-4 w-4" /> Novo Paciente
           </Button>
         )}
@@ -177,7 +177,7 @@ export default function Patients() {
                   {errors.email && <p className="text-[11px] text-red-500">{errors.email.message}</p>}
                 </div>
               </div>
-              <div className="flex justify-end gap-2.5 pt-4 border-t border-[#E2E8F0]">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pt-4 border-t border-[#E2E8F0]">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)} className="text-[#64748B]">
                   Cancelar
                 </Button>
@@ -226,12 +226,12 @@ export default function Patients() {
               />
             ) : (
               filteredPatients.map(patient => (
-                <div key={patient.id} className="p-3.5 flex items-center justify-between hover:bg-[#F8FAFC] transition-colors">
-                  <div className="flex items-center gap-3">
+                <div key={patient.id} className="p-3.5 flex items-start sm:items-center justify-between gap-3 hover:bg-[#F8FAFC] transition-colors">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] text-[#1E5FA6] font-bold text-[12px] flex items-center justify-center">
                       {patient.name.charAt(0).toUpperCase()}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h4 className="font-semibold text-[13px] text-[#0F172A]">{patient.name}</h4>
                       <p className="text-[12px] text-[#64748B]">
                         {patient.healthPlanName && (

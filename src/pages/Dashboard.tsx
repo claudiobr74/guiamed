@@ -184,14 +184,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1 border-b border-[#E2E8F0]">
         <div>
           <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">Painel de Solicitações</h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">Visão geral do fluxo de solicitações médicas e formulários preenchidos</p>
         </div>
-        <Link to="/nova-solicitacao">
-          <Button className="h-[38px] text-[13px] font-semibold">
+        <Link to="/nova-solicitacao" className="w-full sm:w-auto">
+          <Button className="h-[40px] w-full sm:w-auto text-[13px] font-semibold">
             <Plus className="mr-1.5 h-4 w-4" /> Nova Solicitação
           </Button>
         </Link>
@@ -307,8 +307,8 @@ export default function Dashboard() {
                   const opName = operators[req.operatorId]?.name || req.operatorName || '-';
 
                   return (
-                    <div key={req.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-[#F8FAFC] gap-4 transition-colors">
-                      <div className="space-y-1 flex-1 pr-4 min-w-0">
+                    <div key={req.id} className="p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-[#F8FAFC] gap-3 sm:gap-4 transition-colors">
+                      <div className="space-y-1 flex-1 pr-0 lg:pr-4 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold text-[13px] text-[#0F172A] flex items-center gap-1.5">
                             <FileText className="h-3.5 w-3.5 text-[#1E5FA6]" />
@@ -344,7 +344,7 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 justify-between md:justify-end text-xs shrink-0">
+                      <div className="flex flex-wrap items-center gap-2.5 justify-between lg:justify-end text-xs shrink-0 w-full lg:w-auto">
                         <span className="flex items-center text-[#94A3B8] text-[11px]">
                           <Calendar className="mr-1 h-3.5 w-3.5" />
                           {format(date, "dd/MM/yyyy", { locale: ptBR })}

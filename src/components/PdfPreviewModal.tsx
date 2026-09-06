@@ -85,7 +85,7 @@ export default function PdfPreviewModal({
   useEffect(() => {
     if (isOpen) {
       setCurrentPage(1);
-      setScale(1.0);
+      setScale(window.innerWidth < 640 ? 0.72 : 1.0);
       setRotation(0);
       setRenderError(null);
     }
@@ -121,11 +121,11 @@ export default function PdfPreviewModal({
   const handleRotate = () => setRotation(prev => (prev + 90) % 360);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0F172A]/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-[12px] shadow-[0_25px_50px_rgba(15,23,42,0.3)] w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden border border-[#CBD5E1] animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-[#0F172A]/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-none sm:rounded-[12px] shadow-[0_25px_50px_rgba(15,23,42,0.3)] w-full max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden border-0 sm:border border-[#CBD5E1] animate-in fade-in duration-150">
         
         {/* Header Bar */}
-        <div className="px-4 sm:px-6 py-3 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 bg-[#F8FAFC]">
+        <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-[#E2E8F0] flex flex-wrap items-start sm:items-center justify-between gap-2 sm:gap-3 bg-[#F8FAFC] safe-top">
           <div>
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-[#1E5FA6]" />
@@ -137,7 +137,7 @@ export default function PdfPreviewModal({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
@@ -257,13 +257,13 @@ export default function PdfPreviewModal({
         </div>
 
         {/* PDF Viewer Body */}
-        <div className="flex-1 bg-[#E2E8F0] p-4 sm:p-6 overflow-auto flex justify-center items-start min-h-[450px]">
+        <div className="flex-1 min-h-0 bg-[#E2E8F0] p-2 sm:p-6 overflow-auto flex justify-center items-start">
           {fileData ? (
             <div className="shadow-2xl rounded-sm bg-white overflow-hidden transition-transform duration-100">
               <Document
                 file={fileData}
                 loading={
-                  <div className="p-16 flex flex-col items-center justify-center text-center space-y-3 bg-white w-[600px] min-h-[500px]">
+                  <div className="p-8 sm:p-16 flex flex-col items-center justify-center text-center space-y-3 bg-white w-[82vw] sm:w-[600px] min-h-[420px] sm:min-h-[500px]">
                     <div className="w-8 h-8 border-3 border-[#1E5FA6] border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-xs font-semibold text-[#0F172A]">Carregando página do PDF...</p>
                   </div>
@@ -277,7 +277,7 @@ export default function PdfPreviewModal({
                   setRenderError(err?.message || 'Falha ao renderizar PDF');
                 }}
                 error={
-                  <div className="p-12 text-center bg-white w-[600px] space-y-4">
+                  <div className="p-6 sm:p-12 text-center bg-white w-[82vw] sm:w-[600px] space-y-4">
                     <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
                     <div>
                       <h4 className="text-sm font-bold text-gray-800">Visualização Integrada Indisponível</h4>
