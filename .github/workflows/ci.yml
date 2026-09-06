@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - simplify/lizacare-baseline
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   build:
