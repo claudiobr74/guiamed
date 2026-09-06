@@ -10,8 +10,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <input
         type={type}
+        data-ui="input"
         className={cn(
-          "flex h-[38px] w-full rounded-[8px] border bg-white px-3 py-2 text-[13px] text-[#0F172A] placeholder:text-[#94A3B8] transition-all outline-none",
+          "flex h-[38px] w-full min-w-0 rounded-[8px] border bg-white px-3 py-2 text-[13px] text-[#0F172A] placeholder:text-[#94A3B8] transition-all outline-none",
           error
             ? "border-[#DC2626] focus:border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/20"
             : "border-[#E2E8F0] hover:border-[#CBD5E1] focus:border-[#1E5FA6] focus:ring-2 focus:ring-[#1E5FA6]/20",
