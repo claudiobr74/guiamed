@@ -5,6 +5,8 @@ import { Toaster } from 'react-hot-toast';
 import { cn } from '../lib/utils';
 import { useAuthStore } from '../stores/authStore';
 
+const LOGO_SRC = '/brand/lizacare-logo-fixed.webp';
+
 export default function AppLayout() {
   const location = useLocation();
   const signOut = useAuthStore(state => state.signOut);
@@ -31,7 +33,7 @@ export default function AppLayout() {
       {/* MOBILE TOP BAR */}
       <header className="md:hidden h-16 flex items-center justify-between px-3 sm:px-4 bg-white/95 backdrop-blur border-b border-[#E2E8F0] sticky top-0 z-40 safe-top">
         <Link to="/" className="flex items-center min-w-0" onClick={() => setMobileMenuOpen(false)}>
-          <img src="/brand/lizacare-logo-2026.webp" alt="LizaCare" className="h-10 w-auto max-w-[180px] object-contain" />
+          <img src={LOGO_SRC} alt="LizaCare" className="h-10 w-auto max-w-[170px] object-contain" />
         </Link>
         <button
           type="button"
@@ -65,7 +67,7 @@ export default function AppLayout() {
         <div className="mb-4 md:mb-6 flex items-center justify-center min-h-16 md:min-h-20">
           <Link to="/" className="flex items-center justify-center" onClick={() => setMobileMenuOpen(false)}>
             <img
-              src="/brand/lizacare-logo-2026.webp"
+              src={LOGO_SRC}
               alt="LizaCare"
               className="h-auto w-full max-w-[205px] object-contain"
             />

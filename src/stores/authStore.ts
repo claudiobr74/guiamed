@@ -21,7 +21,7 @@ interface AuthState {
   user: User | null;
   profile: DoctorProfile | null;
   loading: boolean;
-  init: () => void;
+  init: () => () => void;
   updateProfile: (data: Partial<DoctorProfile>) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -31,32 +31,52 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   loading: true,
   init: () => {
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const docRef = doc(db, 'users', user.uid);
-          const docSnap = await getDoc(docRef);
-          let profile = null;
-          if (docSnap.exists()) {
-            profile = docSnap.data() as DoctorProfile;
-          } else {
-            // Initialize empty profile
-            profile = { name: user.displayName || '', email: user.email || '', crm: '', uf: '', cpf: '', specialty: '' };
-            await setDoc(docRef, profile);
-          }
-          set({ user, profile, loading: false });
-        } catch (err) {
-          console.warn('Could not fetch doctor profile immediately from Firestore, using auth user info:', err);
-          set({
-            user,
-            profile: { name: user.displayName || '', email: user.email || '', crm: '', uf: '', cpf: '', specialty: '' },
-            loading: false
-          });
-        }
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
         set({ user: null, profile: null, loading: false });
+        return;
+      }
+
+      // Make authentication available to protected routes immediately.
+      // Profile loading must never block a successful Firebase login.
+      set({ user, loading: false });
+
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        let profile: DoctorProfile;
+
+        if (docSnap.exists()) {
+          profile = docSnap.data() as DoctorProfile;
+        } else {
+          profile = {
+            name: user.displayName || '',
+            email: user.email || '',
+            crm: '',
+            uf: '',
+            cpf: '',
+            specialty: ''
+          };
+          await setDoc(docRef, profile);
+        }
+
+        set({ profile });
+      } catch (err) {
+        console.warn('Could not fetch doctor profile immediately from Firestore, using auth user info:', err);
+        set({
+          profile: {
+            name: user.displayName || '',
+            email: user.email || '',
+            crm: '',
+            uf: '',
+            cpf: '',
+            specialty: ''
+          }
+        });
       }
     });
+
+    return unsubscribe;
   },
   updateProfile: async (data) => {
     const { user, profile } = get();

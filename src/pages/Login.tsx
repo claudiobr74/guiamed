@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { useAuthStore } from '../stores/authStore';
+
+const LOGO_SRC = '/brand/lizacare-logo-fixed.webp';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,7 +15,15 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const user = useAuthStore(state => state.user);
+  const authLoading = useAuthStore(state => state.loading);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/', { replace: true });
+    }
+  }, [authLoading, user, navigate]);
 
   const handleGoogleLogin = async () => {
     setError('');
@@ -20,7 +31,7 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      navigate('/');
+      // Navigation is driven by authStore after Firebase confirms the session.
     } catch (err: any) {
       setError(err.message || 'Erro ao autenticar com Google');
     } finally {
@@ -38,7 +49,8 @@ export default function Login() {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      navigate('/');
+      // Do not navigate here. Waiting for the auth observer avoids a race
+      // where ProtectedRoute can still see user=null and redirect back to login.
     } catch (err: any) {
       setError(err.message || 'Erro de autenticação');
     } finally {
@@ -47,14 +59,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-[12px] shadow-2xs border border-[#E2E8F0]">
+    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 bg-white p-6 sm:p-8 rounded-[12px] shadow-2xs border border-[#E2E8F0]">
         <div className="text-center">
-          <img
-            src="/brand/lizacare-logo-2026.webp"
-            alt="LizaCare"
-            className="w-full max-w-[360px] h-auto mx-auto object-contain"
-          />
+          <img src={LOGO_SRC} alt="LizaCare" className="w-full max-w-[300px] h-auto mx-auto object-contain" />
           <h2 className="mt-5 text-[18px] font-bold text-[#0F172A]">
             {isLogin ? 'Acesse sua conta médica' : 'Crie seu cadastro de médico'}
           </h2>
@@ -73,9 +81,9 @@ export default function Login() {
           <Button
             type="button"
             variant="outline"
-            className="w-full h-[38px] flex items-center justify-center gap-2 border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#334155] text-[13px] font-medium"
+            className="w-full h-[40px] flex items-center justify-center gap-2 border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#334155] text-[13px] font-medium"
             onClick={handleGoogleLogin}
-            disabled={loading}
+            disabled={loading || authLoading}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -92,7 +100,7 @@ export default function Login() {
               />
               <path
                 fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 0 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
             Entrar com Google
@@ -114,7 +122,7 @@ export default function Login() {
                 type="email"
                 required
                 placeholder="seu.email@medicina.com.br"
-                className="h-[38px] text-[13px]"
+                className="h-[40px] text-[13px]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -126,7 +134,7 @@ export default function Login() {
                 type="password"
                 required
                 placeholder="••••••••"
-                className="h-[38px] text-[13px]"
+                className="h-[40px] text-[13px]"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -134,7 +142,7 @@ export default function Login() {
           </div>
 
           <div className="pt-1">
-            <Button type="submit" className="w-full h-[38px] text-[13px] font-semibold" disabled={loading}>
+            <Button type="submit" className="w-full h-[40px] text-[13px] font-semibold" disabled={loading || authLoading}>
               {loading ? 'Aguarde...' : isLogin ? 'Entrar no Sistema' : 'Criar Minha Conta'}
             </Button>
           </div>
