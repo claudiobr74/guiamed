@@ -1,0 +1,157 @@
+name: Apply responsive layout polish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/responsive-polish.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply focused responsive improvements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, expected=1):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrence(s), found {count}: {old[:80]!r}')
+              p.write_text(text.replace(old, new))
+
+          # Dashboard: better mobile CTA and request action wrapping.
+          replace('src/pages/Dashboard.tsx',
+              '<div className="space-y-6">',
+              '<div className="space-y-5 sm:space-y-6">')
+          replace('src/pages/Dashboard.tsx',
+              '<Link to="/nova-solicitacao">\n          <Button className="h-[38px] text-[13px] font-semibold">',
+              '<Link to="/nova-solicitacao" className="w-full sm:w-auto">\n          <Button className="h-[40px] w-full sm:w-auto text-[13px] font-semibold">')
+          replace('src/pages/Dashboard.tsx',
+              'className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-[#F8FAFC] gap-4 transition-colors"',
+              'className="p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between hover:bg-[#F8FAFC] gap-3 sm:gap-4 transition-colors"')
+          replace('src/pages/Dashboard.tsx',
+              'className="space-y-1 flex-1 pr-4 min-w-0"',
+              'className="space-y-1 flex-1 pr-0 lg:pr-4 min-w-0"')
+          replace('src/pages/Dashboard.tsx',
+              'className="flex items-center gap-3 justify-between md:justify-end text-xs shrink-0"',
+              'className="flex flex-wrap items-center gap-2.5 justify-between lg:justify-end text-xs shrink-0 w-full lg:w-auto"')
+
+          # Patients: full-width mobile actions and safer long metadata.
+          replace('src/pages/Patients.tsx',
+              '<div className="space-y-6">',
+              '<div className="space-y-5 sm:space-y-6">')
+          replace('src/pages/Patients.tsx',
+              'className="h-[38px] text-[13px] font-semibold">\n            <Plus className="mr-1.5 h-4 w-4" /> Novo Paciente',
+              'className="h-[40px] w-full sm:w-auto text-[13px] font-semibold">\n            <Plus className="mr-1.5 h-4 w-4" /> Novo Paciente')
+          replace('src/pages/Patients.tsx',
+              'className="flex justify-end gap-2.5 pt-4 border-t border-[#E2E8F0]"',
+              'className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pt-4 border-t border-[#E2E8F0]"')
+          replace('src/pages/Patients.tsx',
+              'className="text-[#64748B]">\n                  Cancelar',
+              'className="w-full sm:w-auto text-[#64748B]">\n                  Cancelar')
+          replace('src/pages/Patients.tsx',
+              'className="h-[38px] px-5 text-[13px] font-semibold">\n                  Salvar Paciente',
+              'className="h-[40px] w-full sm:w-auto px-5 text-[13px] font-semibold">\n                  Salvar Paciente')
+          replace('src/pages/Patients.tsx',
+              'className="p-3.5 flex items-center justify-between hover:bg-[#F8FAFC] transition-colors"',
+              'className="p-3.5 flex items-start sm:items-center justify-between gap-3 hover:bg-[#F8FAFC] transition-colors"')
+          replace('src/pages/Patients.tsx',
+              'className="flex items-center gap-3">\n                    <div className="w-8 h-8 rounded-full',
+              'className="flex items-start sm:items-center gap-3 min-w-0">\n                    <div className="w-8 h-8 rounded-full')
+          replace('src/pages/Patients.tsx',
+              '<div>\n                      <h4 className="font-semibold text-[13px] text-[#0F172A]">{patient.name}</h4>',
+              '<div className="min-w-0">\n                      <h4 className="font-semibold text-[13px] text-[#0F172A]">{patient.name}</h4>')
+
+          # New request: use desktop width, intentional stacking and mobile sticky actions.
+          replace('src/pages/NewRequest.tsx',
+              '<div className="space-y-5 max-w-4xl mx-auto pb-20">',
+              '<div className="space-y-4 sm:space-y-5 max-w-5xl mx-auto pb-8 sm:pb-16">')
+          replace('src/pages/NewRequest.tsx',
+              '<div className="flex items-center gap-2">\n            <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">Nova Solicitação Médica</h1>',
+              '<div className="flex flex-wrap items-center gap-2">\n            <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">Nova Solicitação Médica</h1>')
+          replace('src/pages/NewRequest.tsx',
+              '<div className="flex items-center gap-2.5">\n          <Button\n            variant="outline"\n            onClick={handlePreviewPDF}',
+              '<div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2 sm:gap-2.5">\n          <Button\n            variant="outline"\n            onClick={handlePreviewPDF}')
+          replace('src/pages/NewRequest.tsx',
+              'className="h-[38px] text-[13px] font-medium"',
+              'className="h-[40px] w-full sm:w-auto text-[13px] font-medium"', expected=1)
+          replace('src/pages/NewRequest.tsx',
+              'className="h-[38px] text-[13px] font-semibold"\n            onClick={handleGenerateAndSave}',
+              'className="h-[40px] w-full sm:w-auto text-[13px] font-semibold"\n            onClick={handleGenerateAndSave}', expected=1)
+          replace('src/pages/NewRequest.tsx',
+              'className="py-3.5 px-5 border-b border-[#E2E8F0] flex flex-row items-center justify-between bg-[#F8FAFC]"',
+              'className="py-3.5 px-5 border-b border-[#E2E8F0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-[#F8FAFC]"')
+          replace('src/pages/NewRequest.tsx',
+              'className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] p-3 rounded-[8px] text-[12px] text-[#334155] border border-[#E2E8F0]"',
+              'className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8FAFC] p-3 rounded-[8px] text-[12px] text-[#334155] border border-[#E2E8F0]"')
+          replace('src/pages/NewRequest.tsx',
+              'className={`flex items-center justify-between p-3 rounded-[8px] border transition-all ${',
+              'className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-[8px] border transition-all ${')
+          replace('src/pages/NewRequest.tsx',
+              'className="flex-1 flex flex-col gap-1 pr-3 min-w-0"',
+              'className="flex-1 flex flex-col gap-1 pr-0 sm:pr-3 min-w-0 w-full"')
+          replace('src/pages/NewRequest.tsx',
+              'className="flex items-center gap-2.5 shrink-0"',
+              'className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 w-full sm:w-auto border-t sm:border-t-0 border-[#E2E8F0] pt-2 sm:pt-0"')
+          replace('src/pages/NewRequest.tsx',
+              'className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-row items-center justify-between transition-colors"',
+              'className="py-3 px-5 cursor-pointer hover:bg-[#F8FAFC] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 transition-colors"', expected=2)
+          replace('src/pages/NewRequest.tsx',
+              '<div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border border-[#E2E8F0] p-3.5 rounded-[10px] shadow-[0_4px_20px_rgba(15,23,42,0.08)] flex items-center justify-between gap-4">',
+              '<div className="sticky bottom-2 sm:bottom-0 z-30 bg-white/95 backdrop-blur-md border border-[#E2E8F0] p-2.5 sm:p-3.5 rounded-[12px] shadow-[0_4px_20px_rgba(15,23,42,0.10)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 safe-bottom">')
+          replace('src/pages/NewRequest.tsx',
+              '<div className="flex items-center gap-3">\n          <Button variant="ghost" size="sm" onClick={() => navigate(\'/\')} className="text-[#64748B]">',
+              '<div className="hidden sm:flex items-center gap-3">\n          <Button variant="ghost" size="sm" onClick={() => navigate(\'/\')} className="text-[#64748B]">')
+          replace('src/pages/NewRequest.tsx',
+              '<div className="flex items-center gap-2.5">\n          <Button\n            variant="outline"\n            onClick={handlePreviewPDF}',
+              '<div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">\n          <Button\n            variant="outline"\n            onClick={handlePreviewPDF}', expected=1)
+          replace('src/pages/NewRequest.tsx',
+              'className="h-[38px] text-[13px] font-medium text-[#1E5FA6] border-[#BFDBFE] hover:bg-[#EFF6FF]"',
+              'className="h-[40px] w-full sm:w-auto px-2 sm:px-4 text-[12px] sm:text-[13px] font-medium text-[#1E5FA6] border-[#BFDBFE] hover:bg-[#EFF6FF]"')
+          replace('src/pages/NewRequest.tsx',
+              'className="h-[38px] px-5 text-[13px] font-semibold shadow-xs"',
+              'className="h-[40px] w-full sm:w-auto px-2 sm:px-5 text-[12px] sm:text-[13px] font-semibold shadow-xs"')
+
+          # PDF preview: full-screen mobile viewer and a sensible initial mobile zoom.
+          replace('src/components/PdfPreviewModal.tsx',
+              'setScale(1.0);',
+              'setScale(window.innerWidth < 640 ? 0.72 : 1.0);', expected=1)
+          replace('src/components/PdfPreviewModal.tsx',
+              '<div className="fixed inset-0 z-50 bg-[#0F172A]/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">',
+              '<div className="fixed inset-0 z-50 bg-[#0F172A]/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">')
+          replace('src/components/PdfPreviewModal.tsx',
+              '<div className="bg-white rounded-[12px] shadow-[0_25px_50px_rgba(15,23,42,0.3)] w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden border border-[#CBD5E1] animate-in fade-in duration-150">',
+              '<div className="bg-white rounded-none sm:rounded-[12px] shadow-[0_25px_50px_rgba(15,23,42,0.3)] w-full max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[95vh] flex flex-col overflow-hidden border-0 sm:border border-[#CBD5E1] animate-in fade-in duration-150">')
+          replace('src/components/PdfPreviewModal.tsx',
+              'className="px-4 sm:px-6 py-3 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 bg-[#F8FAFC]"',
+              'className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-[#E2E8F0] flex flex-wrap items-start sm:items-center justify-between gap-2 sm:gap-3 bg-[#F8FAFC] safe-top"')
+          replace('src/components/PdfPreviewModal.tsx',
+              '<div className="flex items-center gap-1.5 sm:gap-2">',
+              '<div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">', expected=1)
+          replace('src/components/PdfPreviewModal.tsx',
+              'className="flex-1 bg-[#E2E8F0] p-4 sm:p-6 overflow-auto flex justify-center items-start min-h-[450px]"',
+              'className="flex-1 min-h-0 bg-[#E2E8F0] p-2 sm:p-6 overflow-auto flex justify-center items-start"')
+          replace('src/components/PdfPreviewModal.tsx',
+              'className="p-16 flex flex-col items-center justify-center text-center space-y-3 bg-white w-[600px] min-h-[500px]"',
+              'className="p-8 sm:p-16 flex flex-col items-center justify-center text-center space-y-3 bg-white w-[82vw] sm:w-[600px] min-h-[420px] sm:min-h-[500px]"')
+          replace('src/components/PdfPreviewModal.tsx',
+              'className="p-12 text-center bg-white w-[600px] space-y-4"',
+              'className="p-6 sm:p-12 text-center bg-white w-[82vw] sm:w-[600px] space-y-4"')
+
+          PY
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/Dashboard.tsx src/pages/Patients.tsx src/pages/NewRequest.tsx src/components/PdfPreviewModal.tsx
+          git commit -m "style: polish responsive clinical workflow"
+          git push origin HEAD:main
